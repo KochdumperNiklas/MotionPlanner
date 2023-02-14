@@ -3,11 +3,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
+from shapely.affinity import affine_transform
 from copy import deepcopy
 
 SCENARIO = 'ZAM_Zip-1_19_T-1.xml'
 
-A_MIN = -9
+V_MAX = 100
 A_MAX = 9
 dt = 0.1
 
@@ -18,7 +19,7 @@ def motionPlanner(file):
     scenario, planning_problem = CommonRoadFileReader(file).open()
 
     # high-level planner: decides on which lanelets to be at which points in time
-    plan = highLevelPlanner(scenario,planning_problem)
+    plan = highLevelPlanner(scenario, planning_problem)
 
     # low-level planner: plans a concrete trajectory for the high-level plan
 
@@ -44,6 +45,8 @@ def highLevelPlanner(scenario, planning_problem):
 
     # determine the high-level plan using the A*-search algorithm
     plan = a_star_search(free_space, cost_lane, planning_problem, lanelets, id2index)
+
+    return plan
 
 
 def cost_lanelets(lanelets, goal_id, id2index):
@@ -117,7 +120,8 @@ def free_space_lanelet(lanelets, obstacles):
                 space = []
 
                 if lower[0] > l.distance[0]:
-                    space.append((l.distance[0], lower[0]))
+                    pgon = interval2polygon([l.distance[0], -V_MAX], [lower[0], V_MAX])
+                    space.append(pgon)
 
                 cnt = 0
 
@@ -129,14 +133,17 @@ def free_space_lanelet(lanelets, obstacles):
                         if lower[i] < upper[cnt]:
                             ind = i
 
-                    space.append((upper[ind], lower[ind+1]))
+                    pgon = interval2polygon([upper[ind], -V_MAX], [lower[ind+1], V_MAX])
+                    space.append(pgon)
                     cnt = ind + 1
 
                 if max(upper) < l.distance[len(l.distance)-1]:
-                    space.append((max(upper), l.distance[len(l.distance)-1]))
+                    pgon = interval2polygon([max(upper), -V_MAX], [l.distance[len(l.distance)-1], V_MAX])
+                    space.append(pgon)
 
             else:
-                space = [(l.distance[0], l.distance[len(l.distance)-1])]
+                pgon = interval2polygon([l.distance[0], -V_MAX], [l.distance[len(l.distance)-1], V_MAX])
+                space = [pgon]
 
             free_space.append(space)
 
@@ -185,6 +192,25 @@ def is_intersecting(range1, range2):
 
     return False
 
+def interval2polygon(lb, ub):
+    """convert an interval given by lower and upper bound to a polygon"""
+
+    return Polygon([(lb[0],lb[1]), (lb[0], ub[1]), (ub[0], ub[1]), (ub[0], lb[1])])
+
+def expand_node(node, lanelet_id, space, lane_changes, expect_lane_changes):
+    """add value for the current time step to a node for the search algorithm"""
+
+    # add current lanelet to list of lanelets
+    l = deepcopy(node.lanelets)
+    l.append(lanelet_id)
+
+    # add reachable space to the list
+    s = deepcopy(node.space)
+    s.append(space)
+
+    # create resulting node
+    return Node(l, s, lane_changes, expect_lane_changes)
+
 def a_star_search(free_space, cost, planning_problem, lanelets, id2index):
     """determine optimal lanelet for each time step using A*-search"""
 
@@ -195,7 +221,8 @@ def a_star_search(free_space, cost, planning_problem, lanelets, id2index):
 
     goal_space_start, goal_space_end = projection_lanelet_centerline(lanelets[id2index[goal_id]],
                                                                      goal_state.position.shapes[0].shapely_object)
-    goal_space = (goal_space_start, goal_space_end)
+    v = goal_state.velocity
+    goal_space = interval2polygon([goal_space_start, v.start], [goal_space_end, v.end])
 
     # get lanelet and space for the initial point
     x0 = planning_problem.initial_state.position
@@ -204,14 +231,15 @@ def a_star_search(free_space, cost, planning_problem, lanelets, id2index):
         if l.polygon.shapely_object.contains(Point(x0[0], x0[1])):
             x0_id = l.lanelet_id
 
-    x0_space_start, x0_space_end = projection_lanelet_centerline(lanelets[id2index[x0_id]], Polygon([(x0[0]-0.1,
-                                  x0[1]-0.1), (x0[0]-0.1, x0[1]+0.1), (x0[0]+0.1, x0[1]+0.1), (x0[0]+0.1, x0[1]-0.1)]))
+    pgon = interval2polygon([x0[0]-0.01, x0[1]-0.01], [x0[0]+0.01, x0[1]+0.01])
+    x0_space_start, x0_space_end = projection_lanelet_centerline(lanelets[id2index[x0_id]], pgon)
 
-    x0_space = 0.5 * (x0_space_start + x0_space_end)
+    v = planning_problem.initial_state.velocity
+    x0_space = interval2polygon([x0_space_start, v - 0.01], [x0_space_end, v + 0.01])
 
     # initialize the frontier
     frontier = []
-    frontier.append(Node([x0_id], [(x0_space, x0_space)], cost[id2index[x0_id]]))
+    frontier.append(Node([x0_id], [x0_space], 0, cost[id2index[x0_id]]))
 
     # loop until a solution has been found
     while len(frontier) > 0:
@@ -224,13 +252,13 @@ def a_star_search(free_space, cost, planning_problem, lanelets, id2index):
 
         # check if goal set has been reached
         if len(node.lanelets) >= goal_state.time_step.start \
-                and is_intersecting(goal_space, node.space[len(node.space)-1]):
+                and goal_space.intersects(node.space[len(node.space)-1]):
             return node.lanelets, node.space
 
         # create child nodes
         if len(node.lanelets) <= goal_state.time_step.end:
-            childred = create_child_nodes(node, free_space, cost, lanelets, id2index)
-            frontier.append(children)
+            children = create_child_nodes(node, free_space, cost, lanelets, id2index)
+            frontier.extend(children)
 
 
 def create_child_nodes(node, free_space, cost, lanelets, id2index):
@@ -241,44 +269,75 @@ def create_child_nodes(node, free_space, cost, lanelets, id2index):
     ind = len(node.lanelets)
     lanelet = lanelets[id2index[node.lanelets[ind-1]]]
 
-    # bloat currently reachable space by maximum acceleration and deceleration
+    # compute reachable set using maximum acceleration and deceleration
     space = node.space[ind-1]
-    space = (space[0] + dt * A_MIN, space[1] + dt * A_MAX)
+
+    space1 = affine_transform(space, [1, dt, 0, 1, 0.5 * dt ** 2 * A_MAX, dt * A_MAX])
+    space2 = affine_transform(space, [1, dt, 0, 1, -0.5 * dt ** 2 * A_MAX, -dt * A_MAX])
+
+    space = space1.union(space2)
+    space = space.convex_hull
 
     # create children resulting from staying on the same lanelet
     space_lanelet = free_space[id2index[node.lanelets[ind-1]]][ind]
 
     for sp in space_lanelet:
-        if is_intersecting(sp, space):
-            l = deepcopy(node.lanelets)
-            l.append(node.lanelets[ind-1])
-            s = deepcopy(node.space)
-            s.append((max(sp[0], space[0]), min(sp[1], space[1])))
-            c = node.cost
-            children.append(Node(l, s, c))
+        if sp.intersects(space):
+
+            space = sp.intersection(space)
+            lane_changes = node.lane_changes
+            expect_lane_changes = cost[id2index[node.lanelets[ind-1]]]
+
+            node_new = expand_node(node, node.lanelets[ind-1], space, lane_changes, expect_lane_changes)
+            children.append(node_new)
 
     # create children for lane change to the left
     if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
-        space_left = free_space[id2index[lanelet.adj_left]][ind]
-        if is_intersecting(sp, space_left):
-            l = deepcopy(node.lanelets)
-            l.append(lanelet.adj_left)
-            s = deepcopy(node.space)
-            s.append((max(sp[0], space_left[0]), min(sp[1], space_left[1])))
-            c = node.cost
-            children.append(Node(l, s, c))
+
+        for space_left in free_space[id2index[lanelet.adj_left]][ind]:
+            if sp.intersects(space_left):
+
+                space = sp.intersection(space_left)
+                lane_changes = node.lane_changes + 1
+                expect_lane_changes = cost[id2index[lanelet.adf_left]]
+
+                node_new = expand_node(node, node.lanelets[ind-1], space, lane_changes, expect_lane_changes)
+                children.append(node_new)
 
     # create children for lane change to the right
+    if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
 
+        for space_right in free_space[id2index[lanelet.adj_right]][ind]:
+            if sp.intersects(space_right):
 
+                space = sp.intersection(space_right)
+                lane_changes = node.lane_changes + 1
+                expect_lane_changes = cost[id2index[lanelet.adj_right]]
+
+                node_new = expand_node(node, node.lanelets[ind - 1], space, lane_changes, expect_lane_changes)
+                children.append(node_new)
+
+    return children
 
 class Node:
+    """class representing a single node for A*-search"""
 
-    def __init__(self, lanelets, space, cost):
+    def __init__(self, lanelets, space, lane_changes, expect_lane_changes):
+        """class constructor"""
 
+        # store object properties
         self.lanelets = lanelets
         self.space = space
-        self.cost = cost
+        self.lane_changes = lane_changes
+        self.expect_lane_changes = expect_lane_changes
+
+        # compute costs
+        self.cost = self.cost_function()
+
+    def cost_function(self):
+        """cost function for A*-search"""
+
+        return self.lane_changes + self.expect_lane_changes - len(self.lanelets)*dt
 
 if __name__ == "__main__":
 
