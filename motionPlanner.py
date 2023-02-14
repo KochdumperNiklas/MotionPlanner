@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from shapely.affinity import affine_transform
+from shapely.affinity import translate
 from copy import deepcopy
 
 SCENARIO = 'ZAM_Zip-1_19_T-1.xml'
@@ -11,6 +12,7 @@ SCENARIO = 'ZAM_Zip-1_19_T-1.xml'
 V_MAX = 100
 A_MAX = 9
 dt = 0.1
+L = 4.3
 
 def motionPlanner(file):
     """plan a safe motion for the given CommonRoad scenario"""
@@ -31,6 +33,7 @@ def highLevelPlanner(scenario, planning_problem):
     planning_problem = list(planning_problem.planning_problem_dict.values())[0]
     goal = planning_problem.goal
     goal_lanelet = list(goal.lanelets_of_goal_position.values())[0][0]
+    final_time = goal.state_list[0].time_step.end
 
     # crete dictionary that converts from lanelet ID to index in the list
     lanelets = scenario.lanelet_network.lanelets
@@ -41,7 +44,7 @@ def highLevelPlanner(scenario, planning_problem):
     cost_lane = cost_lanelets(lanelets, goal_lanelet, id2index)
 
     # compute free space on each lanelet at different times
-    free_space = free_space_lanelet(lanelets, scenario.obstacles)
+    free_space = free_space_lanelet(lanelets, scenario.obstacles, final_time + 1)
 
     # determine the high-level plan using the A*-search algorithm
     plan = a_star_search(free_space, cost_lane, planning_problem, lanelets, id2index)
@@ -83,7 +86,7 @@ def cost_lanelets(lanelets, goal_id, id2index):
 
     return cost
 
-def free_space_lanelet(lanelets, obstacles):
+def free_space_lanelet(lanelets, obstacles, length):
     """compute free space on each lanelet for all time steps"""
 
     free_space_all = []
@@ -91,7 +94,7 @@ def free_space_lanelet(lanelets, obstacles):
     # loop over all lanelets
     for l in lanelets:
 
-        occupied_space = [[] for i in range(0, len(obstacles[0].prediction.occupancy_set))]
+        occupied_space = [[] for i in range(0, length)]
 
         # loop over all obstacles
         for obs in obstacles:
@@ -104,7 +107,7 @@ def free_space_lanelet(lanelets, obstacles):
 
                     # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
                     dist_min, dist_max = projection_lanelet_centerline(l, o.shape.shapely_object)
-                    occupied_space[o.time_step-1].append((dist_min, dist_max))
+                    occupied_space[o.time_step-1].append((dist_min-0.5*L, dist_max+0.5*L))
 
         # unite occupied spaces that belong to the same time step to obtain free space
         free_space = []
@@ -251,7 +254,7 @@ def a_star_search(free_space, cost, planning_problem, lanelets, id2index):
         node = frontier.pop(0)
 
         # check if goal set has been reached
-        if len(node.lanelets) >= goal_state.time_step.start \
+        if len(node.lanelets) >= goal_state.time_step.start and node.lanelets[len(node.lanelets)-1] == goal_id \
                 and goal_space.intersects(node.space[len(node.space)-1]):
             return node.lanelets, node.space
 
@@ -284,37 +287,51 @@ def create_child_nodes(node, free_space, cost, lanelets, id2index):
     for sp in space_lanelet:
         if sp.intersects(space):
 
-            space = sp.intersection(space)
+            space_new = sp.intersection(space)
             lane_changes = node.lane_changes
             expect_lane_changes = cost[id2index[node.lanelets[ind-1]]]
 
-            node_new = expand_node(node, node.lanelets[ind-1], space, lane_changes, expect_lane_changes)
+            node_new = expand_node(node, node.lanelets[ind-1], space_new, lane_changes, expect_lane_changes)
             children.append(node_new)
+
+    # create children for moving to a successor lanelet
+    space_ = translate(space, -lanelet.distance[len(lanelet.distance)-1], 0)
+
+    for suc in lanelet.successor:
+        for sp in free_space[id2index[suc]][ind]:
+            if space_.intersects(sp):
+
+                space_new = sp.intersection(space_)
+                lane_changes = node.lane_changes
+                expect_lane_changes = cost[id2index[suc]]
+
+                node_new = expand_node(node, suc, space_new, lane_changes, expect_lane_changes)
+                children.append(node_new)
 
     # create children for lane change to the left
     if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
 
         for space_left in free_space[id2index[lanelet.adj_left]][ind]:
-            if sp.intersects(space_left):
+            if space.intersects(space_left):
 
-                space = sp.intersection(space_left)
+                space_new = space.intersection(space_left)
                 lane_changes = node.lane_changes + 1
-                expect_lane_changes = cost[id2index[lanelet.adf_left]]
+                expect_lane_changes = cost[id2index[lanelet.adj_left]]
 
-                node_new = expand_node(node, node.lanelets[ind-1], space, lane_changes, expect_lane_changes)
+                node_new = expand_node(node, lanelet.adj_left, space_new, lane_changes, expect_lane_changes)
                 children.append(node_new)
 
     # create children for lane change to the right
     if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
 
         for space_right in free_space[id2index[lanelet.adj_right]][ind]:
-            if sp.intersects(space_right):
+            if space.intersects(space_right):
 
-                space = sp.intersection(space_right)
+                space_new = space.intersection(space_right)
                 lane_changes = node.lane_changes + 1
                 expect_lane_changes = cost[id2index[lanelet.adj_right]]
 
-                node_new = expand_node(node, node.lanelets[ind - 1], space, lane_changes, expect_lane_changes)
+                node_new = expand_node(node, lanelet.adj_right, space_new, lane_changes, expect_lane_changes)
                 children.append(node_new)
 
     return children
