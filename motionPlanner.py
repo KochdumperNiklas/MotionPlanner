@@ -10,6 +10,9 @@ from shapely.affinity import translate
 from copy import deepcopy
 from casadi import *
 
+from commonroad.geometry.shape import Rectangle
+from commonroad.visualization.draw_params import ShapeParams
+
 SCENARIO = 'ZAM_Zip-1_19_T-1.xml'
 
 V_MAX = 100
@@ -17,6 +20,7 @@ A_MAX = 9
 S_MAX = np.deg2rad(24.0)
 dt = 0.1
 L = 4.3
+W = 1.7
 WB = 2.4
 
 R = np.diag([0.01, 100.0])              # input cost matrix, penalty for inputs - [accel, steer]
@@ -480,8 +484,6 @@ def lowLevelPlanner(planning_problem, plan, space, space_xy):
     # plan the trajectory via optimization
     x, u = optimal_control_problem(poly_xv, poly_xy, x0)
 
-    test = 1
-
     return x, u
 
 def polygon2polytope(pgon):
@@ -611,18 +613,24 @@ def vehicle_model():
 
 if __name__ == "__main__":
 
-    space_xy = motionPlanner(SCENARIO)
+    x, u = motionPlanner(SCENARIO)
 
     scenario, planning_problem_set = CommonRoadFileReader(SCENARIO).open()
 
-    time_step = 0
+    # visualization
     plt.figure(figsize=(25, 10))
-    rnd = MPRenderer()
-    rnd.draw_params.time_begin = time_step
-    scenario.draw(rnd)
-    planning_problem_set.draw(rnd)
-    rnd.render()
-    plt.plot(*space_xy[time_step].exterior.xy)
-    plt.show()
 
-    test = 1
+    for i in range(0, x.shape[1]):
+        plt.cla()
+        rnd = MPRenderer()
+
+        rnd.draw_params.time_begin = i
+        scenario.draw(rnd)
+        planning_problem_set.draw(rnd)
+
+        param = ShapeParams(opacity=1, edgecolor="k", linewidth=0.0, zorder=17, facecolor='r')
+        r = Rectangle(length=L, width=W, center=np.array([x[0, i], x[1, i]]), orientation=x[3, i])
+        r.draw(rnd, param)
+
+        rnd.render()
+        plt.pause(0.01)
