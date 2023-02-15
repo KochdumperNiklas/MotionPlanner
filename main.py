@@ -20,10 +20,10 @@ file = "ZAM_Zip-1_19_T-1.xml"
 scenario, planning_problem = CommonRoadFileReader(os.path.join('scenarios', file)).open()
 
 # high-level planner: decides on which lanelets to be at which points in time
-plan, space, space_xy = highLevelPlanner(scenario, planning_problem)
+plan, space, vel = highLevelPlanner(scenario, planning_problem)
 
 # low-level planner: plans a concrete trajectory for the high-level plan
-x, u = lowLevelPlanner(planning_problem, plan, space, space_xy)
+x, u = lowLevelPlanner(planning_problem, plan, space, vel)
 
 # visualization
 plt.figure(figsize=(25, 10))

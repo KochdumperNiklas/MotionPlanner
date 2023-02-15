@@ -38,10 +38,15 @@ def highLevelPlanner(scenario, planning_problem):
     # shrink space by computing reachable set backward in time starting from final set
     space = reduce_space(space, plan, lanelets, id2index)
 
+    # extract the safe velocity intervals at each time point
+    vel = []
+    for s in space:
+        vel.append((s.bounds[1], s.bounds[3]))
+
     # transform space from lanelet coordinate system to global coordinate system
     space_xy = lanelet2global(space, plan, lanelets, id2index)
 
-    return plan, space, space_xy
+    return plan, space_xy, vel
 
 
 def cost_lanelets(lanelets, goal_id, id2index):

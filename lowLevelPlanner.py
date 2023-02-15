@@ -14,18 +14,13 @@ R = np.diag([0.01, 100.0])              # input cost matrix, penalty for inputs 
 RD = np.diag([0.01, 100.0])             # input difference cost matrix, penalty for change of inputs - [accel, steer]
 
 
-def lowLevelPlanner(planning_problem, plan, space, space_xy):
+def lowLevelPlanner(planning_problem, plan, space, vel):
     """plan a concrete trajectory for the given high-level plan via optimization"""
 
-    # convert xv-space to polytopes
-    poly_xv = []
+    # convert polygons representing the drivable area to polytopes
+    poly = []
     for p in space:
-        poly_xv.append(polygon2polytope(p))
-
-    # convert xy-space to polytopes
-    poly_xy = []
-    for p in space_xy:
-        poly_xy.append(polygon2polytope(p))
+        poly.append(polygon2polytope(p))
 
     # assemble initial state
     planning_problem = list(planning_problem.planning_problem_dict.values())[0]
@@ -34,10 +29,10 @@ def lowLevelPlanner(planning_problem, plan, space, space_xy):
     x0 = np.array([init_state.position[0], init_state.position[1], init_state.velocity, init_state.orientation])
 
     # construct reference trajectory
-    x_ref = reference_trajectory(space_xy)
+    x_ref = reference_trajectory(space)
 
     # plan the trajectory via optimization
-    x, u = optimal_control_problem(poly_xv, poly_xy, x0, x_ref)
+    x, u = optimal_control_problem(poly, vel, x0, x_ref)
 
     return x, u
 
@@ -99,7 +94,7 @@ def reference_trajectory(space):
 
     return x_ref
 
-def optimal_control_problem(poly_xv, poly_xy, x0, ref_traj):
+def optimal_control_problem(poly, vel, x0, ref_traj):
     """solve an optimal control problem to obtain a concrete trajectory"""
 
     # get vehicle model
@@ -109,19 +104,19 @@ def optimal_control_problem(poly_xv, poly_xy, x0, ref_traj):
     opti = casadi.Opti()
 
     # initialize variables
-    x = opti.variable(nx, len(poly_xy))
-    u = opti.variable(nu, len(poly_xy)-1)
+    x = opti.variable(nx, len(poly))
+    u = opti.variable(nu, len(poly)-1)
 
     # define cost function
     cost = 0
 
-    for i in range(len(poly_xy)-1):
+    for i in range(len(poly)-1):
 
         # minimize control inputs
         cost += mtimes(mtimes(u[:, i].T, R), u[:, i])
 
         # minimize difference between consecutive control inputs
-        if i < len(poly_xy) - 2:
+        if i < len(poly) - 2:
             cost += mtimes(mtimes((u[:, i] - u[:, i + 1]).T, RD), u[:, i] - u[:, i + 1])
 
         # minimize distance to reference trajectory
@@ -130,19 +125,18 @@ def optimal_control_problem(poly_xv, poly_xy, x0, ref_traj):
     opti.minimize(cost)
 
     # constraint (trajectory has to satisfy the differential equation)
-    for i in range(len(poly_xy)-1):
+    for i in range(len(poly)-1):
         opti.subject_to(x[:, i + 1] == f(x[:, i], u[:, i]))
 
     # constraint (trajectory has to be inside the safe driving corridor)
-    for i in range(len(poly_xy)):
+    for i in range(len(poly)):
 
-        A = poly_xy[i][0]
-        b = poly_xy[i][1]
+        A = poly[i][0]
+        b = poly[i][1]
         opti.subject_to(mtimes(A, x[0:2, i]) <= b)
 
-        """A = poly_xv[i][0]
-        b = poly_xv[i][1]
-        opti.subject_to(mtimes(A, x[[0, 2], i]) <= b)"""
+        opti.subject_to(x[2, i] >= vel[i][0])
+        opti.subject_to(x[2, i] <= vel[i][1])
 
     # constraints on the control input
     opti.subject_to(u[0, :] >= -A_MAX)
@@ -152,7 +146,7 @@ def optimal_control_problem(poly_xv, poly_xy, x0, ref_traj):
     opti.subject_to(x[:, 0] == x0)
 
     # solver settings
-    opti.solver('ipopt')        # opti.solver('sqpmethod', {'qpsol': 'osqp'})
+    opti.solver('ipopt')
 
     # solve optimal control problem
     sol = opti.solve()
