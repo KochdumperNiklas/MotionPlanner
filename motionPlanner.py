@@ -1,4 +1,6 @@
 from commonroad.common.file_reader import CommonRoadFileReader
+from commonroad.visualization.mp_renderer import MPRenderer
+from commonroad.visualization.draw_params import MPDrawParams
 import numpy as np
 import matplotlib.pyplot as plt
 from shapely.geometry import Point
@@ -21,10 +23,12 @@ def motionPlanner(file):
     scenario, planning_problem = CommonRoadFileReader(file).open()
 
     # high-level planner: decides on which lanelets to be at which points in time
-    plan = highLevelPlanner(scenario, planning_problem)
+    plan, space, space_xy = highLevelPlanner(scenario, planning_problem)
 
     # low-level planner: plans a concrete trajectory for the high-level plan
+    test = 1
 
+    return space_xy
 
 def highLevelPlanner(scenario, planning_problem):
     """decide on which lanelets to be at all points in time"""
@@ -35,7 +39,7 @@ def highLevelPlanner(scenario, planning_problem):
     goal_lanelet = list(goal.lanelets_of_goal_position.values())[0][0]
     final_time = goal.state_list[0].time_step.end
 
-    # crete dictionary that converts from lanelet ID to index in the list
+    # create dictionary that converts from lanelet ID to index in the list
     lanelets = scenario.lanelet_network.lanelets
     id = [l.lanelet_id for l in lanelets]
     id2index = dict(zip(id, [i for i in range(0, len(id))]))
@@ -47,9 +51,15 @@ def highLevelPlanner(scenario, planning_problem):
     free_space = free_space_lanelet(lanelets, scenario.obstacles, final_time + 1)
 
     # determine the high-level plan using the A*-search algorithm
-    plan = a_star_search(free_space, cost_lane, planning_problem, lanelets, id2index)
+    plan, space = a_star_search(free_space, cost_lane, planning_problem, lanelets, id2index)
 
-    return plan
+    # shrink space by computing reachable set backward in time starting from final set
+    space = reduce_space(space, plan, lanelets, id2index)
+
+    # transform space from lanelet coordinate system to global coordinate system
+    space_xy = lanelet2global(space, plan, lanelets, id2index)
+
+    return plan, space, space_xy
 
 
 def cost_lanelets(lanelets, goal_id, id2index):
@@ -336,6 +346,91 @@ def create_child_nodes(node, free_space, cost, lanelets, id2index):
 
     return children
 
+def reduce_space(space, plan, lanelets, id2index):
+    """reduce the drivable space by propagating the goal set backward in time"""
+
+    # loop over all time steps
+    for i in range(len(space)-1, 0, -1):
+
+        # propagate reachable set backwards in time
+        space1 = affine_transform(space[i], [1, -dt, 0, 1, -0.5 * dt ** 2 * A_MAX, dt * A_MAX])
+        space2 = affine_transform(space[i], [1, -dt, 0, 1, 0.5 * dt ** 2 * A_MAX, -dt * A_MAX])
+        space_new = space1.union(space2)
+        space_new = space_new.convex_hull
+
+        # shift reachable set by lanelet length if the lanelet is changed
+        if not plan[i-1] == plan[i] and not lanelets[id2index[plan[i-1]]].adj_left == plan[i] and \
+                not lanelets[id2index[plan[i-1]]].adj_right == plan[i]:
+            lanelet = lanelets[id2index[plan[i-1]]]
+            dist = lanelet.distance[len(lanelet.distance)-1]
+            space_new = translate(space_new, dist, 0)
+
+        # intersect with previous rechable set
+        space[i - 1] = space_new.intersection(space[i - 1])
+
+    return space
+
+def lanelet2global(space, plan, lanelets, id2index):
+    """transform free space from lanelet coordinate system to global coordinate system"""
+
+    space_xy = []
+
+    # loop over all time steps
+    for i in range(0, len(space)):
+
+        # initialization
+        lanelet = lanelets[id2index[plan[i]]]
+
+        lower = space[i].bounds[0]
+        upper = space[i].bounds[2]
+
+        left_vertices = []
+        right_vertices = []
+
+        # loop over the single segments of the lanelet
+        for j in range(0, len(lanelet.distance)-1):
+
+            intermediate_point = True
+
+            if lower >= lanelet.distance[j] and lower <= lanelet.distance[j+1]:
+
+                d = lanelet.left_vertices[j + 1] - lanelet.left_vertices[j]
+                p_left = lanelet.left_vertices[j] + d/np.linalg.norm(d) * (lower - lanelet.distance[j])
+                left_vertices.append(Point(p_left[0], p_left[1]))
+
+                d = lanelet.right_vertices[j + 1] - lanelet.right_vertices[j]
+                p_right = lanelet.right_vertices[j] + d / np.linalg.norm(d) * (lower - lanelet.distance[j])
+                right_vertices.append(Point(p_right[0], p_right[1]))
+
+                intermediate_point = False
+
+            if upper >= lanelet.distance[j] and upper <= lanelet.distance[j+1]:
+
+                d = lanelet.left_vertices[j + 1] - lanelet.left_vertices[j]
+                p_left = lanelet.left_vertices[j] + d / np.linalg.norm(d) * (upper - lanelet.distance[j])
+                left_vertices.append(Point(p_left[0], p_left[1]))
+
+                d = lanelet.right_vertices[j + 1] - lanelet.right_vertices[j]
+                p_right = lanelet.right_vertices[j] + d / np.linalg.norm(d) * (upper - lanelet.distance[j])
+                right_vertices.append(Point(p_right[0], p_right[1]))
+
+                break
+
+            if len(left_vertices) > 0 and intermediate_point:
+
+                p_left = lanelet.left_vertices[j]
+                left_vertices.append(Point(p_left[0], p_left[1]))
+
+                p_right = lanelet.right_vertices[j]
+                right_vertices.append(Point(p_right[0], p_right[1]))
+
+        # construct the resulting polygon in the global coordinate system
+        right_vertices.reverse()
+        left_vertices.extend(right_vertices)
+        space_xy.append(Polygon(left_vertices))
+
+    return space_xy
+
 class Node:
     """class representing a single node for A*-search"""
 
@@ -358,4 +453,18 @@ class Node:
 
 if __name__ == "__main__":
 
-    motionPlanner(SCENARIO)
+    space_xy = motionPlanner(SCENARIO)
+
+    scenario, planning_problem_set = CommonRoadFileReader(SCENARIO).open()
+
+    time_step = 0
+    plt.figure(figsize=(25, 10))
+    rnd = MPRenderer()
+    rnd.draw_params.time_begin = time_step
+    scenario.draw(rnd)
+    planning_problem_set.draw(rnd)
+    rnd.render()
+    plt.plot(*space_xy[time_step].exterior.xy)
+    plt.show()
+
+    test = 1
