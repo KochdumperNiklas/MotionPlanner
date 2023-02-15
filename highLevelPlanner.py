@@ -6,14 +6,13 @@ from shapely.affinity import affine_transform
 from shapely.affinity import translate
 from copy import deepcopy
 
-V_MAX = 100
-A_MAX = 9
-S_MAX = np.deg2rad(24.0)
-dt = 0.1
-L = 4.3
 
-def highLevelPlanner(scenario, planning_problem):
+def highLevelPlanner(scenario, planning_problem, param):
     """decide on which lanelets to be at all points in time"""
+
+    # store useful properties in parameter dictionary
+    param['time_step'] = scenario.dt
+    param['v_max'] = 100
 
     # extract goal region and initial state
     planning_problem = list(planning_problem.planning_problem_dict.values())[0]
@@ -30,13 +29,13 @@ def highLevelPlanner(scenario, planning_problem):
     cost_lane = cost_lanelets(lanelets, goal_lanelet, id2index)
 
     # compute free space on each lanelet at different times
-    free_space = free_space_lanelet(lanelets, scenario.obstacles, final_time + 1)
+    free_space = free_space_lanelet(lanelets, scenario.obstacles, final_time + 1, param)
 
     # determine the high-level plan using the A*-search algorithm
-    plan, space = a_star_search(free_space, cost_lane, planning_problem, lanelets, id2index)
+    plan, space = a_star_search(free_space, cost_lane, planning_problem, lanelets, id2index, param)
 
     # shrink space by computing reachable set backward in time starting from final set
-    space = reduce_space(space, plan, lanelets, id2index)
+    space = reduce_space(space, plan, lanelets, id2index, param)
 
     # extract the safe velocity intervals at each time point
     vel = []
@@ -83,10 +82,11 @@ def cost_lanelets(lanelets, goal_id, id2index):
 
     return cost
 
-def free_space_lanelet(lanelets, obstacles, length):
+def free_space_lanelet(lanelets, obstacles, length, param):
     """compute free space on each lanelet for all time steps"""
 
     free_space_all = []
+    v_max = param['v_max']
 
     # loop over all lanelets
     for l in lanelets:
@@ -104,7 +104,7 @@ def free_space_lanelet(lanelets, obstacles, length):
 
                     # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
                     dist_min, dist_max = projection_lanelet_centerline(l, o.shape.shapely_object)
-                    occupied_space[o.time_step-1].append((dist_min-0.5*L, dist_max+0.5*L))
+                    occupied_space[o.time_step-1].append((dist_min-0.5*param['length'], dist_max+0.5*param['length']))
 
         # unite occupied spaces that belong to the same time step to obtain free space
         free_space = []
@@ -120,7 +120,7 @@ def free_space_lanelet(lanelets, obstacles, length):
                 space = []
 
                 if lower[0] > l.distance[0]:
-                    pgon = interval2polygon([l.distance[0], -V_MAX], [lower[0], V_MAX])
+                    pgon = interval2polygon([l.distance[0], -v_max], [lower[0], v_max])
                     space.append(pgon)
 
                 cnt = 0
@@ -133,16 +133,16 @@ def free_space_lanelet(lanelets, obstacles, length):
                         if lower[i] < upper[cnt]:
                             ind = i
 
-                    pgon = interval2polygon([upper[ind], -V_MAX], [lower[ind+1], V_MAX])
+                    pgon = interval2polygon([upper[ind], -v_max], [lower[ind+1], v_max])
                     space.append(pgon)
                     cnt = ind + 1
 
                 if max(upper) < l.distance[len(l.distance)-1]:
-                    pgon = interval2polygon([max(upper), -V_MAX], [l.distance[len(l.distance)-1], V_MAX])
+                    pgon = interval2polygon([max(upper), -v_max], [l.distance[len(l.distance)-1], v_max])
                     space.append(pgon)
 
             else:
-                pgon = interval2polygon([l.distance[0], -V_MAX], [l.distance[len(l.distance)-1], V_MAX])
+                pgon = interval2polygon([l.distance[0], -v_max], [l.distance[len(l.distance)-1], v_max])
                 space = [pgon]
 
             free_space.append(space)
@@ -209,9 +209,9 @@ def expand_node(node, lanelet_id, space, lane_changes, expect_lane_changes):
     s.append(space)
 
     # create resulting node
-    return Node(l, s, lane_changes, expect_lane_changes)
+    return Node(node.dt, l, s, lane_changes, expect_lane_changes)
 
-def a_star_search(free_space, cost, planning_problem, lanelets, id2index):
+def a_star_search(free_space, cost, planning_problem, lanelets, id2index, param):
     """determine optimal lanelet for each time step using A*-search"""
 
     # get goal time and set
@@ -239,7 +239,7 @@ def a_star_search(free_space, cost, planning_problem, lanelets, id2index):
 
     # initialize the frontier
     frontier = []
-    frontier.append(Node([x0_id], [x0_space], 0, cost[id2index[x0_id]]))
+    frontier.append(Node(param['time_step'], [x0_id], [x0_space], 0, cost[id2index[x0_id]]))
 
     # loop until a solution has been found
     while len(frontier) > 0:
@@ -257,11 +257,11 @@ def a_star_search(free_space, cost, planning_problem, lanelets, id2index):
 
         # create child nodes
         if len(node.lanelets) <= goal_state.time_step.end:
-            children = create_child_nodes(node, free_space, cost, lanelets, id2index)
+            children = create_child_nodes(node, free_space, cost, lanelets, id2index, param)
             frontier.extend(children)
 
 
-def create_child_nodes(node, free_space, cost, lanelets, id2index):
+def create_child_nodes(node, free_space, cost, lanelets, id2index, param):
     """create all possible child nodes for the current node"""
 
     # initialization
@@ -272,8 +272,11 @@ def create_child_nodes(node, free_space, cost, lanelets, id2index):
     # compute reachable set using maximum acceleration and deceleration
     space = node.space[ind-1]
 
-    space1 = affine_transform(space, [1, dt, 0, 1, 0.5 * dt ** 2 * A_MAX, dt * A_MAX])
-    space2 = affine_transform(space, [1, dt, 0, 1, -0.5 * dt ** 2 * A_MAX, -dt * A_MAX])
+    dt = param['time_step']
+    a_max = param['a_max']
+
+    space1 = affine_transform(space, [1, dt, 0, 1, 0.5 * dt ** 2 * a_max, dt * a_max])
+    space2 = affine_transform(space, [1, dt, 0, 1, -0.5 * dt ** 2 * a_max, -dt * a_max])
 
     space = space1.union(space2)
     space = space.convex_hull
@@ -333,15 +336,18 @@ def create_child_nodes(node, free_space, cost, lanelets, id2index):
 
     return children
 
-def reduce_space(space, plan, lanelets, id2index):
+def reduce_space(space, plan, lanelets, id2index, param):
     """reduce the drivable space by propagating the goal set backward in time"""
 
     # loop over all time steps
     for i in range(len(space)-1, 0, -1):
 
         # propagate reachable set backwards in time
-        space1 = affine_transform(space[i], [1, -dt, 0, 1, -0.5 * dt ** 2 * A_MAX, dt * A_MAX])
-        space2 = affine_transform(space[i], [1, -dt, 0, 1, 0.5 * dt ** 2 * A_MAX, -dt * A_MAX])
+        dt = param['time_step']
+        a_max = param['a_max']
+
+        space1 = affine_transform(space[i], [1, -dt, 0, 1, -0.5 * dt ** 2 * a_max, dt * a_max])
+        space2 = affine_transform(space[i], [1, -dt, 0, 1, 0.5 * dt ** 2 * a_max, -dt * a_max])
         space_new = space1.union(space2)
         space_new = space_new.convex_hull
 
@@ -421,10 +427,11 @@ def lanelet2global(space, plan, lanelets, id2index):
 class Node:
     """class representing a single node for A*-search"""
 
-    def __init__(self, lanelets, space, lane_changes, expect_lane_changes):
+    def __init__(self, dt, lanelets, space, lane_changes, expect_lane_changes):
         """class constructor"""
 
         # store object properties
+        self.dt = dt
         self.lanelets = lanelets
         self.space = space
         self.lane_changes = lane_changes
@@ -436,4 +443,4 @@ class Node:
     def cost_function(self):
         """cost function for A*-search"""
 
-        return self.lane_changes + self.expect_lane_changes - len(self.lanelets)*dt
+        return self.lane_changes + self.expect_lane_changes - len(self.lanelets)*self.dt

@@ -2,20 +2,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from casadi import *
 
-V_MAX = 100
-A_MAX = 9
-S_MAX = np.deg2rad(24.0)
-dt = 0.1
-L = 4.3
-W = 1.7
-WB = 2.4
-
 R = np.diag([0.01, 100.0])              # input cost matrix, penalty for inputs - [accel, steer]
 RD = np.diag([0.01, 100.0])             # input difference cost matrix, penalty for change of inputs - [accel, steer]
 
 
-def lowLevelPlanner(planning_problem, plan, space, vel):
+def lowLevelPlanner(scenario, planning_problem, param, plan, space, vel):
     """plan a concrete trajectory for the given high-level plan via optimization"""
+
+    # store time step size
+    param['time_step'] = scenario.dt
 
     # convert polygons representing the drivable area to polytopes
     poly = []
@@ -32,7 +27,7 @@ def lowLevelPlanner(planning_problem, plan, space, vel):
     x_ref = reference_trajectory(space)
 
     # plan the trajectory via optimization
-    x, u = optimal_control_problem(poly, vel, x0, x_ref)
+    x, u = optimal_control_problem(poly, vel, x0, x_ref, param)
 
     return x, u
 
@@ -94,11 +89,11 @@ def reference_trajectory(space):
 
     return x_ref
 
-def optimal_control_problem(poly, vel, x0, ref_traj):
+def optimal_control_problem(poly, vel, x0, ref_traj, param):
     """solve an optimal control problem to obtain a concrete trajectory"""
 
     # get vehicle model
-    f, nx, nu = vehicle_model()
+    f, nx, nu = vehicle_model(param)
 
     # initialize optimizer
     opti = casadi.Opti()
@@ -139,10 +134,10 @@ def optimal_control_problem(poly, vel, x0, ref_traj):
         opti.subject_to(x[2, i] <= vel[i][1])
 
     # constraints on the control input
-    opti.subject_to(u[0, :] >= -A_MAX)
-    opti.subject_to(u[0, :] <= A_MAX)
-    opti.subject_to(u[1, :] >= -S_MAX)
-    opti.subject_to(u[1, :] <= S_MAX)
+    opti.subject_to(u[0, :] >= -param['a_max'])
+    opti.subject_to(u[0, :] <= param['a_max'])
+    opti.subject_to(u[1, :] >= -param['s_max'])
+    opti.subject_to(u[1, :] <= param['s_max'])
     opti.subject_to(x[:, 0] == x0)
 
     # solver settings
@@ -157,7 +152,7 @@ def optimal_control_problem(poly, vel, x0, ref_traj):
 
     return x_, u_
 
-def vehicle_model():
+def vehicle_model(param):
     """differential equation describing the dynamic behavior of the car"""
 
     # states
@@ -178,10 +173,10 @@ def vehicle_model():
     ode = vertcat(v * cos(phi),
                   v * sin(phi),
                   acc,
-                  v * tan(steer) / WB)
+                  v * tan(steer) / param['wheelbase'])
 
     # define integrator
-    options = {'tf': dt, 'simplify': True, 'number_of_finite_elements': 2}
+    options = {'tf': param['time_step'], 'simplify': True, 'number_of_finite_elements': 2}
     dae = {'x': x, 'p': u, 'ode': ode}
 
     intg = integrator('intg', 'rk', dae, options)
