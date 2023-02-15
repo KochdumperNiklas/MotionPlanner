@@ -33,8 +33,11 @@ def lowLevelPlanner(planning_problem, plan, space, space_xy):
 
     x0 = np.array([init_state.position[0], init_state.position[1], init_state.velocity, init_state.orientation])
 
+    # construct reference trajectory
+    x_ref = reference_trajectory(space_xy)
+
     # plan the trajectory via optimization
-    x, u = optimal_control_problem(poly_xv, poly_xy, x0)
+    x, u = optimal_control_problem(poly_xv, poly_xy, x0, x_ref)
 
     return x, u
 
@@ -65,7 +68,38 @@ def polygon2polytope(pgon):
 
     return C, D
 
-def optimal_control_problem(poly_xv, poly_xy, x0):
+def reference_trajectory(space):
+    """determine parameters for reference trajectory that is defined by the condition a*x_ref + b*y_ref - c = 0"""
+
+    x_ref = []
+
+    # loop over all time steps
+    for s in space:
+
+        # get vertices of the polygon
+        vx, vy = s.exterior.coords.xy
+        v = np.stack((vx, vy))
+
+        # split into upper and lower bound of the lanelet
+        n = int(((len(vx)-1)/2))
+        v_left = v[:, 0:n]
+        v_right = v[:, n:2*n]
+
+        # compute points on the reference trajectory
+        p1 = 0.5*(v_left[:, 0] + v_right[:, n-1])
+        p2 = 0.5*(v_left[:, n-1] + v_right[:, 0])
+
+        # compute parameter a, b, and c for the reference trajectory a*x_ref + b*y_ref + c = 0
+        d = p1 - p2
+        a = d[1]
+        b = -d[0]
+        c = -a*p1[0] - b*p1[1]
+
+        x_ref.append((a, b, c))
+
+    return x_ref
+
+def optimal_control_problem(poly_xv, poly_xy, x0, ref_traj):
     """solve an optimal control problem to obtain a concrete trajectory"""
 
     # get vehicle model
@@ -89,6 +123,9 @@ def optimal_control_problem(poly_xv, poly_xy, x0):
         # minimize difference between consecutive control inputs
         if i < len(poly_xy) - 2:
             cost += mtimes(mtimes((u[:, i] - u[:, i + 1]).T, RD), u[:, i] - u[:, i + 1])
+
+        # minimize distance to reference trajectory
+        cost += (ref_traj[i][0] * x[0, i] + ref_traj[i][1] * x[1, i] + ref_traj[i][2])**2
 
     opti.minimize(cost)
 
