@@ -28,11 +28,18 @@ def highLevelPlanner(scenario, planning_problem, param):
     # compute costs (= number of lane changes to reach goal) as well as distance to goal for each lanelet
     cost_lane, dist_lane = cost_lanelets(lanelets, goal_lanelet, id2index)
 
+    # determine lanelet and correpsoning space for the initial state
+    lane_x0 = lanelet_initial_state(planning_problem, lanelets, id2index)
+
     # compute free space on each lanelet at different times
     free_space = free_space_lanelet(lanelets, scenario.obstacles, final_time + 1, param)
 
+    # compute the desired velocity profile over time
+    vel_prof = velocity_profile(planning_problem, scenario.dt, dist_lane, lanelets, id2index, lane_x0, final_time + 1)
+
     # determine the high-level plan using the A*-search algorithm
-    plan, space = a_star_search(free_space, cost_lane, dist_lane, planning_problem, lanelets, id2index, param)
+    plan, space = a_star_search(free_space, cost_lane, dist_lane, planning_problem,
+                                lanelets, id2index, param, lane_x0, vel_prof)
 
     # shrink space by computing reachable set backward in time starting from final set
     space = reduce_space(space, plan, lanelets, id2index, param)
@@ -88,6 +95,56 @@ def cost_lanelets(lanelets, goal_id, id2index):
                 queue.append(lanelet.adj_right)
 
     return cost, dist
+
+def lanelet_initial_state(planning_problem, lanelets, id2index):
+    """get lanelet and space for the initial point"""
+
+    x0 = planning_problem.initial_state.position
+
+    for l in lanelets:
+        if l.polygon.shapely_object.contains(Point(x0[0], x0[1])):
+            x0_id = l.lanelet_id
+
+    pgon = interval2polygon([x0[0] - 0.01, x0[1] - 0.01], [x0[0] + 0.01, x0[1] + 0.01])
+    x0_space_start, x0_space_end = projection_lanelet_centerline(lanelets[id2index[x0_id]], pgon)
+
+    return {'id': x0_id, 'space': 0.5*(x0_space_start + x0_space_end)}
+
+def velocity_profile(planning_problem, dt, dist, lanelets, id2index, lane_x0, length):
+    """compute the desired velocity profile over time"""
+
+    # initial velocity
+    vel_init = planning_problem.initial_state.velocity
+
+    # target velocity
+    goal = planning_problem.goal
+    vel_goal = goal.state_list[0].velocity
+
+    # get distance from goal-lanelet start to goal set
+    goal_state = goal.state_list[0]
+    goal_set = goal_state.position.shapes[0]
+    goal_id = list(goal.lanelets_of_goal_position.values())[0][0]
+    dist_min, dist_max = projection_lanelet_centerline(lanelets[id2index[goal_id]], goal_set.shapely_object)
+
+    # calculate minimum and maximum distance from initial state to goal set
+    dist_min = dist[id2index[lane_x0['id']]] - lane_x0['space'] + dist_min
+    dist_max = dist[id2index[lane_x0['id']]] - lane_x0['space'] + dist_max
+
+    # calculate minimum and maximum final velocities required to reach the goal set
+    vel_min = 2*dist_min/(goal_state.time_step.end*dt) - vel_init
+    vel_max = 2*dist_max/(goal_state.time_step.start*dt) - vel_init
+
+    vel_min = max(vel_min, vel_goal.start)
+    vel_max = min(vel_max, vel_goal.end)
+
+    if vel_min <= vel_init <= vel_max:
+        vel = [vel_init for i in range(length)]
+    elif vel_init < vel_min:
+        vel = [vel_init + (vel_min - vel_init) * t/length for t in range(length)]
+    else:
+        vel = [vel_init + (vel_max - vel_init) * t/length for t in range(length)]
+
+    return vel
 
 def free_space_lanelet(lanelets, obstacles, length, param):
     """compute free space on each lanelet for all time steps"""
@@ -216,9 +273,9 @@ def expand_node(node, lanelet_id, space, dist_goal, lane_changes, expect_lane_ch
     s.append(space)
 
     # create resulting node
-    return Node(node.dt, l, s, dist_goal, lane_changes, expect_lane_changes)
+    return Node(node.dt, l, s, node.vel_prof, dist_goal, lane_changes, expect_lane_changes)
 
-def a_star_search(free_space, cost, dist, planning_problem, lanelets, id2index, param):
+def a_star_search(free_space, cost, dist, planning_problem, lanelets, id2index, param, lane_x0, vel_prof):
     """determine optimal lanelet for each time step using A*-search"""
 
     # get goal time and set
@@ -231,22 +288,13 @@ def a_star_search(free_space, cost, dist, planning_problem, lanelets, id2index, 
     v = goal_state.velocity
     goal_space = interval2polygon([goal_space_start, v.start], [goal_space_end, v.end])
 
-    # get lanelet and space for the initial point
-    x0 = planning_problem.initial_state.position
-
-    for l in lanelets:
-        if l.polygon.shapely_object.contains(Point(x0[0], x0[1])):
-            x0_id = l.lanelet_id
-
-    pgon = interval2polygon([x0[0]-0.01, x0[1]-0.01], [x0[0]+0.01, x0[1]+0.01])
-    x0_space_start, x0_space_end = projection_lanelet_centerline(lanelets[id2index[x0_id]], pgon)
-
+    # construct space for the initial point
     v = planning_problem.initial_state.velocity
-    x0_space = interval2polygon([x0_space_start, v - 0.01], [x0_space_end, v + 0.01])
+    x0_space = interval2polygon([lane_x0['space']-0.01, v - 0.01], [lane_x0['space']+0.01, v + 0.01])
 
     # initialize the frontier
     frontier = []
-    frontier.append(Node(param['time_step'], [x0_id], [x0_space], 0, 0, cost[id2index[x0_id]]))
+    frontier.append(Node(param['time_step'], [lane_x0['id']], [x0_space], vel_prof, 0, 0, cost[id2index[lane_x0['id']]]))
 
     # loop until a solution has been found
     while len(frontier) > 0:
@@ -438,13 +486,14 @@ def lanelet2global(space, plan, lanelets, id2index):
 class Node:
     """class representing a single node for A*-search"""
 
-    def __init__(self, dt, lanelets, space, dist, lane_changes, expect_lane_changes):
+    def __init__(self, dt, lanelets, space, vel_prof, dist, lane_changes, expect_lane_changes):
         """class constructor"""
 
         # store object properties
         self.dt = dt
         self.lanelets = lanelets
         self.space = space
+        self.vel_prof = vel_prof
         self.dist = dist - space[len(space)-1].bounds[2]
         self.lane_changes = lane_changes
         self.expect_lane_changes = expect_lane_changes
@@ -465,7 +514,33 @@ class Node:
         # expected total time for reaching the goal set
         time = time_curr + time_goal
 
+        # difference from the desired velocity profile up to now
+        vel_curr = 0
+
+        for i in range(len(self.space)):
+            if self.vel_prof[i] <= self.space[i].bounds[1]:
+                vel_curr = vel_curr + (self.space[i].bounds[1] - self.vel_prof[i])
+            elif self.vel_prof[i] >= self.space[i].bounds[3]:
+                vel_curr = vel_curr + (self.vel_prof[i] - self.space[i].bounds[3])
+
+        # expected future difference from the velocity profile
+        vel_expect = 0
+        n = len(self.space)-1
+
+        if self.vel_prof[n] > self.space[n].bounds[3]:
+            vel = self.space[n].bounds[3]
+        elif self.vel_prof[n] < self.space[n].bounds[1]:
+            vel = self.space[n].bounds[1]
+        else:
+            vel = self.vel_prof[n]
+
+        for i in range(len(self.space), len(self.vel_prof)):
+            vel_expect = vel_expect + np.abs(self.vel_prof[i] - vel)
+
+        # expected total average difference from the velocity profile
+        vel_diff = (vel_curr + vel_expect)/len(self.vel_prof)
+
         # expected total number of lane changes until reaching the goal
         lane_changes = self.lane_changes + self.expect_lane_changes
 
-        return time + lane_changes
+        return time + lane_changes + 0*vel_diff
