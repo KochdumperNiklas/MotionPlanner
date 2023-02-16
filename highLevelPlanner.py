@@ -25,14 +25,14 @@ def highLevelPlanner(scenario, planning_problem, param):
     id = [l.lanelet_id for l in lanelets]
     id2index = dict(zip(id, [i for i in range(0, len(id))]))
 
-    # compute costs (= number of lane changes to reach goal) for each lanelet
-    cost_lane = cost_lanelets(lanelets, goal_lanelet, id2index)
+    # compute costs (= number of lane changes to reach goal) as well as distance to goal for each lanelet
+    cost_lane, dist_lane = cost_lanelets(lanelets, goal_lanelet, id2index)
 
     # compute free space on each lanelet at different times
     free_space = free_space_lanelet(lanelets, scenario.obstacles, final_time + 1, param)
 
     # determine the high-level plan using the A*-search algorithm
-    plan, space = a_star_search(free_space, cost_lane, planning_problem, lanelets, id2index, param)
+    plan, space = a_star_search(free_space, cost_lane, dist_lane, planning_problem, lanelets, id2index, param)
 
     # shrink space by computing reachable set backward in time starting from final set
     space = reduce_space(space, plan, lanelets, id2index, param)
@@ -51,9 +51,12 @@ def highLevelPlanner(scenario, planning_problem, param):
 def cost_lanelets(lanelets, goal_id, id2index):
     """assign a cost to each lanelet that is based on the number of required lane changes to reach goal set"""
 
-    # initialize costs
+    # initialize costs and distance to goal lanelet
     cost = [np.inf for i in range(0, len(lanelets))]
     cost[id2index[goal_id]] = 0
+
+    dist = [np.inf for i in range(0, len(lanelets))]
+    dist[id2index[goal_id]] = 0
 
     # initialize queue with goal lanelet
     queue = []
@@ -67,20 +70,24 @@ def cost_lanelets(lanelets, goal_id, id2index):
 
         for s in lanelet.predecessor:
             if cost[id2index[s]] == np.inf:
+                lanelet_ = lanelets[id2index[s]]
                 cost[id2index[s]] = cost[id2index[q]]
+                dist[id2index[s]] = dist[id2index[q]] + lanelet_.distance[len(lanelet_.distance)-1]
                 queue.append(s)
 
         if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
             if cost[id2index[lanelet.adj_left]] == np.inf:
                 cost[id2index[lanelet.adj_left]] = cost[id2index[q]] + 1
+                dist[id2index[s]] = dist[id2index[q]]
                 queue.append(lanelet.adj_left)
 
         if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
             if cost[id2index[lanelet.adj_right]] == np.inf:
                 cost[id2index[lanelet.adj_right]] = cost[id2index[q]] + 1
+                dist[id2index[s]] = dist[id2index[q]]
                 queue.append(lanelet.adj_right)
 
-    return cost
+    return cost, dist
 
 def free_space_lanelet(lanelets, obstacles, length, param):
     """compute free space on each lanelet for all time steps"""
@@ -197,7 +204,7 @@ def interval2polygon(lb, ub):
 
     return Polygon([(lb[0],lb[1]), (lb[0], ub[1]), (ub[0], ub[1]), (ub[0], lb[1])])
 
-def expand_node(node, lanelet_id, space, lane_changes, expect_lane_changes):
+def expand_node(node, lanelet_id, space, dist_goal, lane_changes, expect_lane_changes):
     """add value for the current time step to a node for the search algorithm"""
 
     # add current lanelet to list of lanelets
@@ -209,9 +216,9 @@ def expand_node(node, lanelet_id, space, lane_changes, expect_lane_changes):
     s.append(space)
 
     # create resulting node
-    return Node(node.dt, l, s, lane_changes, expect_lane_changes)
+    return Node(node.dt, l, s, dist_goal, lane_changes, expect_lane_changes)
 
-def a_star_search(free_space, cost, planning_problem, lanelets, id2index, param):
+def a_star_search(free_space, cost, dist, planning_problem, lanelets, id2index, param):
     """determine optimal lanelet for each time step using A*-search"""
 
     # get goal time and set
@@ -239,7 +246,7 @@ def a_star_search(free_space, cost, planning_problem, lanelets, id2index, param)
 
     # initialize the frontier
     frontier = []
-    frontier.append(Node(param['time_step'], [x0_id], [x0_space], 0, cost[id2index[x0_id]]))
+    frontier.append(Node(param['time_step'], [x0_id], [x0_space], 0, 0, cost[id2index[x0_id]]))
 
     # loop until a solution has been found
     while len(frontier) > 0:
@@ -257,11 +264,11 @@ def a_star_search(free_space, cost, planning_problem, lanelets, id2index, param)
 
         # create child nodes
         if len(node.lanelets) <= goal_state.time_step.end:
-            children = create_child_nodes(node, free_space, cost, lanelets, id2index, param)
+            children = create_child_nodes(node, free_space, cost, dist, lanelets, id2index, param)
             frontier.extend(children)
 
 
-def create_child_nodes(node, free_space, cost, lanelets, id2index, param):
+def create_child_nodes(node, free_space, cost, dist, lanelets, id2index, param):
     """create all possible child nodes for the current node"""
 
     # initialization
@@ -290,8 +297,9 @@ def create_child_nodes(node, free_space, cost, lanelets, id2index, param):
             space_new = sp.intersection(space)
             lane_changes = node.lane_changes
             expect_lane_changes = cost[id2index[node.lanelets[ind-1]]]
+            dist_goal = dist[id2index[node.lanelets[ind-1]]]
 
-            node_new = expand_node(node, node.lanelets[ind-1], space_new, lane_changes, expect_lane_changes)
+            node_new = expand_node(node, node.lanelets[ind-1], space_new, dist_goal, lane_changes, expect_lane_changes)
             children.append(node_new)
 
     # create children for moving to a successor lanelet
@@ -304,8 +312,9 @@ def create_child_nodes(node, free_space, cost, lanelets, id2index, param):
                 space_new = sp.intersection(space_)
                 lane_changes = node.lane_changes
                 expect_lane_changes = cost[id2index[suc]]
+                dist_goal = dist[id2index[suc]]
 
-                node_new = expand_node(node, suc, space_new, lane_changes, expect_lane_changes)
+                node_new = expand_node(node, suc, space_new, dist_goal, lane_changes, expect_lane_changes)
                 children.append(node_new)
 
     # create children for lane change to the left
@@ -317,8 +326,9 @@ def create_child_nodes(node, free_space, cost, lanelets, id2index, param):
                 space_new = space.intersection(space_left)
                 lane_changes = node.lane_changes + 1
                 expect_lane_changes = cost[id2index[lanelet.adj_left]]
+                dist_goal = dist[id2index[lanelet.adj_left]]
 
-                node_new = expand_node(node, lanelet.adj_left, space_new, lane_changes, expect_lane_changes)
+                node_new = expand_node(node, lanelet.adj_left, space_new, dist_goal, lane_changes, expect_lane_changes)
                 children.append(node_new)
 
     # create children for lane change to the right
@@ -330,8 +340,9 @@ def create_child_nodes(node, free_space, cost, lanelets, id2index, param):
                 space_new = space.intersection(space_right)
                 lane_changes = node.lane_changes + 1
                 expect_lane_changes = cost[id2index[lanelet.adj_right]]
+                dist_goal = dist[id2index[lanelet.adj_right]]
 
-                node_new = expand_node(node, lanelet.adj_right, space_new, lane_changes, expect_lane_changes)
+                node_new = expand_node(node, lanelet.adj_right, space_new, dist_goal, lane_changes, expect_lane_changes)
                 children.append(node_new)
 
     return children
@@ -427,13 +438,14 @@ def lanelet2global(space, plan, lanelets, id2index):
 class Node:
     """class representing a single node for A*-search"""
 
-    def __init__(self, dt, lanelets, space, lane_changes, expect_lane_changes):
+    def __init__(self, dt, lanelets, space, dist, lane_changes, expect_lane_changes):
         """class constructor"""
 
         # store object properties
         self.dt = dt
         self.lanelets = lanelets
         self.space = space
+        self.dist = dist - space[len(space)-1].bounds[2]
         self.lane_changes = lane_changes
         self.expect_lane_changes = expect_lane_changes
 
@@ -443,4 +455,17 @@ class Node:
     def cost_function(self):
         """cost function for A*-search"""
 
-        return self.lane_changes + self.expect_lane_changes - len(self.lanelets)*self.dt
+        # current time
+        time_curr = len(self.lanelets)*self.dt
+
+        # time until reaching the goal set
+        vel = self.space[len(self.space)-1].bounds[3]
+        time_goal = self.dist/vel
+
+        # expected total time for reaching the goal set
+        time = time_curr + time_goal
+
+        # expected total number of lane changes until reaching the goal
+        lane_changes = self.lane_changes + self.expect_lane_changes
+
+        return time + lane_changes
