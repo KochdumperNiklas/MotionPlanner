@@ -6,6 +6,13 @@ from shapely.affinity import affine_transform
 from shapely.affinity import translate
 from copy import deepcopy
 
+# weighting factors for the cost function
+W_TIME = 0
+W_LANE_CHANGE = 1
+W_VELOCITY = 1
+
+# safety distance
+DIST_SAFE = 2
 
 def highLevelPlanner(scenario, planning_problem, param):
     """decide on which lanelets to be at all points in time"""
@@ -85,13 +92,13 @@ def cost_lanelets(lanelets, goal_id, id2index):
         if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
             if cost[id2index[lanelet.adj_left]] == np.inf:
                 cost[id2index[lanelet.adj_left]] = cost[id2index[q]] + 1
-                dist[id2index[s]] = dist[id2index[q]]
+                dist[id2index[lanelet.adj_left]] = dist[id2index[q]]
                 queue.append(lanelet.adj_left)
 
         if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
             if cost[id2index[lanelet.adj_right]] == np.inf:
                 cost[id2index[lanelet.adj_right]] = cost[id2index[q]] + 1
-                dist[id2index[s]] = dist[id2index[q]]
+                dist[id2index[lanelet.adj_right]] = dist[id2index[q]]
                 queue.append(lanelet.adj_right)
 
     return cost, dist
@@ -168,7 +175,8 @@ def free_space_lanelet(lanelets, obstacles, length, param):
 
                     # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
                     dist_min, dist_max = projection_lanelet_centerline(l, o.shape.shapely_object)
-                    occupied_space[o.time_step-1].append((dist_min-0.5*param['length'], dist_max+0.5*param['length']))
+                    offset = 0.5*param['length'] + DIST_SAFE
+                    occupied_space[o.time_step-1].append((dist_min-offset, dist_max+offset))
 
         # unite occupied spaces that belong to the same time step to obtain free space
         free_space = []
@@ -543,4 +551,4 @@ class Node:
         # expected total number of lane changes until reaching the goal
         lane_changes = self.lane_changes + self.expect_lane_changes
 
-        return time + lane_changes + 0*vel_diff
+        return W_TIME * time + W_LANE_CHANGE * lane_changes + W_VELOCITY * vel_diff
