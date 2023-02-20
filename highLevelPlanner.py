@@ -5,6 +5,7 @@ from shapely.geometry.polygon import Polygon
 from shapely.affinity import affine_transform
 from shapely.affinity import translate
 from copy import deepcopy
+from commonroad.scenario.obstacle import StaticObstacle
 
 # weighting factors for the cost function
 W_TIME = 0
@@ -167,16 +168,32 @@ def free_space_lanelet(lanelets, obstacles, length, param):
         # loop over all obstacles
         for obs in obstacles:
 
-            # loop over all time steps
-            for o in obs.prediction.occupancy_set:
+            # distinguish static and dynamic obstacles
+            if isinstance(obs, StaticObstacle):
 
-                # check if dynamic obstacles occupancy set intersects the lanelet
-                if l.polygon.shapely_object.intersects(o.shape.shapely_object):
+                # check if static obstacle intersects the lanelet
+                if l.polygon.shapely_object.intersects(obs.obstacle_shape.shapely_object):
 
                     # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
-                    dist_min, dist_max = projection_lanelet_centerline(l, o.shape.shapely_object)
-                    offset = 0.5*param['length'] + DIST_SAFE
-                    occupied_space[o.time_step-1].append((dist_min-offset, dist_max+offset))
+                    dist_min, dist_max = projection_lanelet_centerline(l, obs.obstacle_shape.shapely_object)
+                    offset = 0.5 * param['length'] + DIST_SAFE
+
+                    # loop over all time steps
+                    for i in range(length):
+                        occupied_space[i].append((dist_min - offset, dist_max + offset))
+
+            else:
+
+                # loop over all time steps
+                for o in obs.prediction.occupancy_set:
+
+                    # check if dynamic obstacles occupancy set intersects the lanelet
+                    if l.polygon.shapely_object.intersects(o.shape.shapely_object):
+
+                        # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
+                        dist_min, dist_max = projection_lanelet_centerline(l, o.shape.shapely_object)
+                        offset = 0.5*param['length'] + DIST_SAFE
+                        occupied_space[o.time_step-1].append((dist_min-offset, dist_max+offset))
 
         # unite occupied spaces that belong to the same time step to obtain free space
         free_space = []
