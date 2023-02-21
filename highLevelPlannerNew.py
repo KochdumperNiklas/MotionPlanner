@@ -8,7 +8,6 @@ from copy import deepcopy
 from commonroad.scenario.obstacle import StaticObstacle
 
 # weighting factors for the cost function
-W_TIME = 0
 W_LANE_CHANGE = 1
 W_VELOCITY = 1
 
@@ -21,38 +20,23 @@ MIN_LANE_CHANGE = 2
 def highLevelPlannerNew(scenario, planning_problem, param):
     """decide on which lanelets to be at all points in time"""
 
-    # store useful properties in parameter dictionary
-    param['time_step'] = scenario.dt
-    param['v_max'] = 100
+    # extract required information from the planning problem
+    param, lanelets = initialization(scenario, planning_problem, param)
 
-    planning_problem = list(planning_problem.planning_problem_dict.values())[0]
-    param['v_init'] = planning_problem.initial_state.velocity
-
-    param['goal_lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[0][0]
-    param['steps'] = planning_problem.goal.state_list[0].time_step.end
-
-    # create dictionary that maps a lanelet ID to the corresponding lanelet
-    id = [l.lanelet_id for l in scenario.lanelet_network.lanelets]
-    lanelets = dict(zip(id, scenario.lanelet_network.lanelets))
-
-    # compute costs (= number of lane changes to reach goal) as well as distance to goal for each lanelet
-    #cost_lane, dist_lane = cost_lanelets(lanelets, goal_lanelet, id2index)
-
-    # determine lanelet and corresponding space for the initial state
-    lane_x0 = lanelet_initial_state(planning_problem, lanelets)
-
-    # compute free space on each lanelet at different times
+    # compute free space on each lanelet for each time step
     free_space = free_space_lanelet(lanelets, scenario.obstacles, param)
 
     # compute the desired velocity profile over time
-    #vel_prof = velocity_profile(planning_problem, scenario.dt, dist_lane, lanelets, id2index, lane_x0, final_time + 1)
+    vel_prof = velocity_profile(lanelets, param)
 
-    # compute best sequence of lanelets to drive on
-    seq = best_sequence_lanelets(lanelets, lane_x0, free_space, param)
+    # determine all feasible sequence of lanelets to drive on
+    list_seq = feasible_lanelet_sequences(lanelets, free_space, param)
 
-    # determine the high-level plan using the A*-search algorithm
-    plan, space = a_star_search(free_space, cost_lane, dist_lane, planning_problem,
-                                lanelets, id2index, param, lane_x0, vel_prof)
+    # select the best sequence of lanelets
+    seq = select_best_sequence(list_seq, vel_prof, lanelets)
+
+    # refine the plan: decide on which lanelet to be on for all time steps
+    test = 1
 
     # shrink space by computing reachable set backward in time starting from final set
     space = reduce_space(space, plan, lanelets, id2index, param)
@@ -68,50 +52,33 @@ def highLevelPlannerNew(scenario, planning_problem, param):
     return plan, space_xy, vel
 
 
-def cost_lanelets(lanelets, goal_id, id2index):
-    """assign a cost to each lanelet that is based on the number of required lane changes to reach goal set"""
+def initialization(scenario, planning_problem, param):
+    """extract and store the required information from the scenario and the planning problem"""
 
-    # initialize costs and distance to goal lanelet
-    cost = [np.inf for i in range(0, len(lanelets))]
-    cost[id2index[goal_id]] = 0
+    # create dictionary that maps a lanelet ID to the corresponding lanelet
+    id = [l.lanelet_id for l in scenario.lanelet_network.lanelets]
+    lanelets = dict(zip(id, scenario.lanelet_network.lanelets))
 
-    dist = [np.inf for i in range(0, len(lanelets))]
-    dist[id2index[goal_id]] = 0
+    # store useful properties in parameter dictionary
+    param['time_step'] = scenario.dt
+    param['v_max'] = 100
 
-    # initialize queue with goal lanelet
-    queue = []
-    queue.append(goal_id)
+    planning_problem = list(planning_problem.planning_problem_dict.values())[0]
+    param['v_init'] = planning_problem.initial_state.velocity
+    param['steps'] = planning_problem.goal.state_list[0].time_step.end
 
-    # loop until costs for all lanelets have been assigned
-    while len(queue) > 0:
+    # extract parameter for the goal set
+    param['goal_lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[0][0]
+    param['goal_time_start'] = planning_problem.goal.state_list[0].time_step.start
+    param['goal_time_end'] = planning_problem.goal.state_list[0].time_step.start
 
-        q = queue.pop(0)
-        lanelet = lanelets[id2index[q]]
+    goal_space_start, goal_space_end = projection_lanelet_centerline(lanelets[param['goal_lane']],
+                                                                     planning_problem.goal.state_list[0].position.shapes[
+                                                                         0].shapely_object)
+    v = planning_problem.goal.state_list[0].velocity
+    param['goal_set'] = interval2polygon([goal_space_start, v.start], [goal_space_end, v.end])
 
-        for s in lanelet.predecessor:
-            if cost[id2index[s]] == np.inf:
-                lanelet_ = lanelets[id2index[s]]
-                cost[id2index[s]] = cost[id2index[q]]
-                dist[id2index[s]] = dist[id2index[q]] + lanelet_.distance[len(lanelet_.distance)-1]
-                queue.append(s)
-
-        if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
-            if cost[id2index[lanelet.adj_left]] == np.inf:
-                cost[id2index[lanelet.adj_left]] = cost[id2index[q]] + 1
-                dist[id2index[lanelet.adj_left]] = dist[id2index[q]]
-                queue.append(lanelet.adj_left)
-
-        if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
-            if cost[id2index[lanelet.adj_right]] == np.inf:
-                cost[id2index[lanelet.adj_right]] = cost[id2index[q]] + 1
-                dist[id2index[lanelet.adj_right]] = dist[id2index[q]]
-                queue.append(lanelet.adj_right)
-
-    return cost, dist
-
-def lanelet_initial_state(planning_problem, lanelets):
-    """get lanelet and space for the initial point"""
-
+    # determine lanelet and corresponding space for the initial state
     x0 = planning_problem.initial_state.position
 
     for id in lanelets.keys():
@@ -121,41 +88,69 @@ def lanelet_initial_state(planning_problem, lanelets):
     pgon = interval2polygon([x0[0] - 0.01, x0[1] - 0.01], [x0[0] + 0.01, x0[1] + 0.01])
     x0_space_start, x0_space_end = projection_lanelet_centerline(lanelets[x0_id], pgon)
 
-    return {'id': x0_id, 'space': 0.5*(x0_space_start + x0_space_end)}
+    param['x0_lane'] = x0_id
+    param['x0_set'] = 0.5 * (x0_space_start + x0_space_end)
 
-def velocity_profile(planning_problem, dt, dist, lanelets, id2index, lane_x0, length):
+    return param, lanelets
+
+
+def distance2goal(lanelets, param):
+    """compute the distance to the target lanelet for each lanelet"""
+
+    # initialize distance to goal lanelet
+    dist = {param['goal_lane']: 0}
+
+    # initialize queue with goal lanelet
+    queue = []
+    queue.append(param['goal_lane'])
+
+    # loop until distances for all lanelets have been assigned
+    while len(queue) > 0:
+
+        q = queue.pop(0)
+        lanelet = lanelets[q]
+
+        for s in lanelet.predecessor:
+            if not s in dist.keys():
+                lanelet_ = lanelets[s]
+                dist[s] = dist[q] + lanelet_.distance[len(lanelet_.distance)-1]
+                queue.append(s)
+
+        if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
+            if not lanelet.adj_left in dist.keys():
+                dist[lanelet.adj_left] = dist[q]
+                queue.append(lanelet.adj_left)
+
+        if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
+            if not lanelet.adj_right in dist.keys():
+                dist[lanelet.adj_right] = dist[q]
+                queue.append(lanelet.adj_right)
+
+    return dist
+
+def velocity_profile(lanelets, param):
     """compute the desired velocity profile over time"""
 
-    # initial velocity
-    vel_init = planning_problem.initial_state.velocity
-
-    # target velocity
-    goal = planning_problem.goal
-    vel_goal = goal.state_list[0].velocity
-
-    # get distance from goal-lanelet start to goal set
-    goal_state = goal.state_list[0]
-    goal_set = goal_state.position.shapes[0]
-    goal_id = list(goal.lanelets_of_goal_position.values())[0][0]
-    dist_min, dist_max = projection_lanelet_centerline(lanelets[id2index[goal_id]], goal_set.shapely_object)
+    # calculate distance to target lanelet for each lanelet
+    dist = distance2goal(lanelets, param)
 
     # calculate minimum and maximum distance from initial state to goal set
-    dist_min = dist[id2index[lane_x0['id']]] - lane_x0['space'] + dist_min
-    dist_max = dist[id2index[lane_x0['id']]] - lane_x0['space'] + dist_max
+    dist_min = dist[param['x0_lane']] - param['x0_set'] + param['goal_set'].bounds[0]
+    dist_max = dist[param['x0_lane']] - param['x0_set'] + param['goal_set'].bounds[2]
 
     # calculate minimum and maximum final velocities required to reach the goal set
-    vel_min = 2*dist_min/(goal_state.time_step.end*dt) - vel_init
-    vel_max = 2*dist_max/(goal_state.time_step.start*dt) - vel_init
+    vel_min = 2*dist_min/(param['goal_time_end']*param['time_step']) - param['v_init']
+    vel_max = 2*dist_max/(param['goal_time_start']*param['time_step']) - param['v_init']
 
-    vel_min = max(vel_min, vel_goal.start)
-    vel_max = min(vel_max, vel_goal.end)
+    vel_min = max(vel_min, param['goal_set'].bounds[1])
+    vel_max = min(vel_max, param['goal_set'].bounds[3])
 
-    if vel_min <= vel_init <= vel_max:
-        vel = [vel_init for i in range(length)]
-    elif vel_init < vel_min:
-        vel = [vel_init + (vel_min - vel_init) * t/length for t in range(length)]
+    if vel_min <= param['v_init'] <= vel_max:
+        vel = [param['v_init'] for i in range(param['steps'])]
+    elif param['v_init'] < vel_min:
+        vel = [param['v_init'] + (vel_min - param['v_init']) * t/param['steps'] for t in range(length)]
     else:
-        vel = [vel_init + (vel_max - vel_init) * t/length for t in range(length)]
+        vel = [param['v_init'] + (vel_max - param['v_init']) * t/param['steps'] for t in range(length)]
 
     return vel
 
@@ -281,13 +276,15 @@ def interval2polygon(lb, ub):
     return Polygon([(lb[0], lb[1]), (lb[0], ub[1]), (ub[0], ub[1]), (ub[0], lb[1])])
 
 
-def best_sequence_lanelets(lanelets, lane_x0, free_space, param):
-    """find the best sequence of lanelets to drive on"""
+def feasible_lanelet_sequences(lanelets, free_space, param):
+    """determine all feasible sequences of lanelets to drive on that reach the goal state"""
+
+    final_nodes = []
 
     # create initial node
     v = param['v_init']
-    space = interval2polygon([lane_x0['space'] - 0.01, v - 0.01], [lane_x0['space'] + 0.01, v + 0.01])
-    x0 = {'step': 0, 'space': space}
+    space = interval2polygon([param['x0_set'] - 0.01, v - 0.01], [param['x0_set'] + 0.01, v + 0.01])
+    x0 = {'step': 0, 'space': space, 'lanelet': param['x0_lane']}
 
     queue = [Node([x0], [], [], 'none')]
 
@@ -298,31 +295,36 @@ def best_sequence_lanelets(lanelets, lane_x0, free_space, param):
         node = queue.pop()
 
         # compute drivable area for the current lanelet
+        lanelet = lanelets[node.x0[0]['lanelet']]
+
         if len(node.lanelets) == 0:
             prev = []
-            lanelet = lanelets[lane_x0['id']]
         else:
             prev = node.drive_area[len(node.drive_area)-1]
-            lanelet = lanelets[node.lanelets[len(node.lanelets)-1]]
 
         drive_area, left, right, suc = compute_drivable_area(lanelet, node.x0, free_space, prev, node.lane_prev, param)
 
         # check if goal set has been reached
+        if lanelet.lanelet_id == param['goal_lane']:
+            for d in drive_area:
+                if d['space'].intersects(param['goal_set']):
+                    final_nodes.append(expand_node(node, [], drive_area, 'none'))
+                    break
 
         # create child nodes
         for entry in left:
             if len(entry) > MIN_LANE_CHANGE:
-                queue.append(expand_node(node, entry, lanelet.lanelet_id, drive_area, 'right'))
+                queue.append(expand_node(node, entry, drive_area, 'right'))
 
         for entry in right:
             if len(entry) > MIN_LANE_CHANGE:
-                queue.append(expand_node(node, entry, lanelet.lanelet_id, drive_area, 'left'))
+                queue.append(expand_node(node, entry, drive_area, 'left'))
 
         for entry in suc:
             if len(entry) > MIN_LANE_CHANGE:
-                queue.append(expand_node(node, entry, lanelet.lanelet_id, drive_area, 'none'))
+                queue.append(expand_node(node, entry, drive_area, 'none'))
 
-        test = 1
+    return final_nodes
 
 def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, param):
     """compute the drivable area for a single lanelet"""
@@ -383,7 +385,7 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, param):
             for sp in free_space[suc][i+1]:
                 if space_.intersects(sp):
                     space_prev_ = translate(space_prev, -lanelet.distance[len(lanelet.distance) - 1], 0)
-                    successors = add_transition(successors, sp.intersection(space_prev_), i + 1, param)
+                    successors = add_transition(successors, sp.intersection(space_prev_), i + 1, suc, param)
                     successor_possible_ = True
 
         successor_possible = successor_possible_
@@ -394,7 +396,7 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, param):
             for space_left in free_space[lanelet.adj_left][i+1]:
                 if space.intersects(space_left) and not(lane_prev == 'left' and prev[cnt_prev]['step'] == i+1 and
                                                                     space_left.intersects(prev[cnt_prev]['space'])):
-                    left = add_transition(left, space.intersection(space_left), i+1, param)
+                    left = add_transition(left, space.intersection(space_left), i+1, lanelet.adj_left, param)
 
         # check if it is possible to make a lane change to the right
         if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
@@ -402,7 +404,7 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, param):
             for space_right in free_space[lanelet.adj_right][i + 1]:
                 if space.intersects(space_right) and not(lane_prev == 'right' and prev[cnt_prev]['step'] == i+1 and
                                                                     space_right.intersects(prev[cnt_prev]['space'])):
-                    right = add_transition(right, space.intersection(space_right), i+1, param)
+                    right = add_transition(right, space.intersection(space_right), i+1, lanelet.adj_right, param)
 
         # update counter for drivable area on previous lanelet
         if cnt_prev < len(prev) and prev[cnt_prev]['step'] == i+1:
@@ -441,7 +443,7 @@ def reach_set_backward(space, param):
 
     return space_new
 
-def add_transition(transitions, space, time_step, param):
+def add_transition(transitions, space, time_step, lanelet, param):
     """add a new transition to the list of possible transitions"""
 
     # propagate reachable set one time step backwards in time
@@ -455,14 +457,15 @@ def add_transition(transitions, space, time_step, param):
         last_entry = transitions[i][len(transitions[i]) - 1]
 
         # check if the current transition can be added to an existing transition
-        if last_entry['step'] == time_step-1 and space_new.intersects(last_entry['space']):
-            transitions[i].append({'space': space, 'step': time_step})
+        if last_entry['step'] == time_step-1 and last_entry['lanelet'] == lanelet and \
+                space_new.intersects(last_entry['space']):
+            transitions[i].append({'space': space, 'step': time_step, 'lanelet': lanelet})
             found = True
             break
 
     # create a new transition if the current transition could not be added to any exising transition
     if not found:
-        transitions.append([{'space': space, 'step': time_step}])
+        transitions.append([{'space': space, 'step': time_step, 'lanelet': lanelet}])
 
     return transitions
 
@@ -676,20 +679,32 @@ def lanelet2global(space, plan, lanelets, id2index):
 
     return space_xy
 
+def select_best_sequence(list_seq, vel_prof, lanelets):
+    """determine the lanelet sequence with the lowest cost"""
 
-def expand_node(node, x0, lanelet_id, drive_area, lane_prev):
+    min_cost = np.inf
+
+    for l in list_seq:
+        c = l.cost(vel_prof, lanelets)
+        if c < min_cost:
+            seq = deepcopy(l)
+            min_cost = c
+
+    return seq
+
+def expand_node(node, x0, drive_area, lane_prev):
     """add value for the current step to a given node"""
 
     # add current lanelet to list of lanelets
     l = deepcopy(node.lanelets)
-    l.append(lanelet_id)
+    l.append(node.x0[0]['lanelet'])
 
     # add driveable area to the list
     s = deepcopy(node.drive_area)
     s.append(drive_area)
 
     # create resulting node
-    return Node(x0, l, s,lane_prev)
+    return Node(x0, l, s, lane_prev)
 
 
 class Node:
@@ -704,46 +719,46 @@ class Node:
         self.drive_area = drive_area
         self.lane_prev = lane_prev
 
-    def cost_function(self):
-        """cost function for A*-search"""
+    def cost(self, vel_prof, lanelets):
+        """compute cost function value for the node"""
 
-        # current time
-        time_curr = len(self.lanelets)*self.dt
+        # determine cost from deviation to the desired velocity profile
+        vel_diff = np.inf * np.ones(len(vel_prof))
 
-        # time until reaching the goal set
-        vel = self.space[len(self.space)-1].bounds[3]
-        time_goal = self.dist/vel
+        for i in range(len(vel_prof)):
 
-        # expected total time for reaching the goal set
-        time = time_curr + time_goal
+            # loop over all lanelets
+            for d in self.drive_area:
 
-        # difference from the desired velocity profile up to now
-        vel_curr = 0
+                vel_cur = np.inf
 
-        for i in range(len(self.space)):
-            if self.vel_prof[i] <= self.space[i].bounds[1]:
-                vel_curr = vel_curr + (self.space[i].bounds[1] - self.vel_prof[i])
-            elif self.vel_prof[i] >= self.space[i].bounds[3]:
-                vel_curr = vel_curr + (self.vel_prof[i] - self.space[i].bounds[3])
+                # loop over all time steps
+                for set in d:
 
-        # expected future difference from the velocity profile
-        vel_expect = 0
-        n = len(self.space)-1
+                    # compute distance from desired velocity profile
+                    if set['step'] == i:
+                        if vel_prof[i] <= set['space'].bounds[1]:
+                            vel_cur = set['space'].bounds[1] - vel_prof[i]
+                        elif vel_prof[i] >= set['space'].bounds[3]:
+                            vel_cur = vel_prof[i] - set['space'].bounds[3]
+                        else:
+                            vel_cur = 0
+                    elif set['step'] > i:
+                        break
 
-        if self.vel_prof[n] > self.space[n].bounds[3]:
-            vel = self.space[n].bounds[3]
-        elif self.vel_prof[n] < self.space[n].bounds[1]:
-            vel = self.space[n].bounds[1]
-        else:
-            vel = self.vel_prof[n]
+                # total distance -> minimum over the distance for all lanelets
+                if vel_cur < vel_diff[i]:
+                    vel_diff[i] = vel_cur
 
-        for i in range(len(self.space), len(self.vel_prof)):
-            vel_expect = vel_expect + np.abs(self.vel_prof[i] - vel)
+                if vel_diff[i] == 0:
+                    break
 
-        # expected total average difference from the velocity profile
-        vel_diff = (vel_curr + vel_expect)/len(self.vel_prof)
+        # determine number of lane changes
+        lane_changes = 0
 
-        # expected total number of lane changes until reaching the goal
-        lane_changes = self.lane_changes + self.expect_lane_changes
+        for i in range(1, len(self.lanelets)):
+            l = lanelets[self.lanelets[i-1]]
+            if not self.lanelets[i] in l.successor:
+                lane_changes = lane_changes + 1
 
-        return W_TIME * time + W_LANE_CHANGE * lane_changes + W_VELOCITY * vel_diff
+        return W_LANE_CHANGE * lane_changes + W_VELOCITY * np.mean(vel_diff)
