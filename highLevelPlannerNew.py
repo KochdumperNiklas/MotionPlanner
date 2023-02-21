@@ -11,7 +11,7 @@ from commonroad.scenario.obstacle import StaticObstacle
 W_LANE_CHANGE = 1
 W_VELOCITY = 1
 
-# safety distance
+# safety distance to other cars
 DIST_SAFE = 2
 
 # minimum number of consecutive time steps required to perform a lane change
@@ -36,10 +36,7 @@ def highLevelPlannerNew(scenario, planning_problem, param):
     seq = select_best_sequence(list_seq, vel_prof, lanelets)
 
     # refine the plan: decide on which lanelet to be on for all time steps
-    test = 1
-
-    # shrink space by computing reachable set backward in time starting from final set
-    space = reduce_space(space, plan, lanelets, id2index, param)
+    plan, space = refine_plan(seq, vel_prof, lanelets, param)
 
     # extract the safe velocity intervals at each time point
     vel = []
@@ -47,7 +44,7 @@ def highLevelPlannerNew(scenario, planning_problem, param):
         vel.append((s.bounds[1], s.bounds[3]))
 
     # transform space from lanelet coordinate system to global coordinate system
-    space_xy = lanelet2global(space, plan, lanelets, id2index)
+    space_xy = lanelet2global(space, plan, lanelets)
 
     return plan, space_xy, vel
 
@@ -70,7 +67,7 @@ def initialization(scenario, planning_problem, param):
     # extract parameter for the goal set
     param['goal_lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[0][0]
     param['goal_time_start'] = planning_problem.goal.state_list[0].time_step.start
-    param['goal_time_end'] = planning_problem.goal.state_list[0].time_step.start
+    param['goal_time_end'] = planning_problem.goal.state_list[0].time_step.end
 
     goal_space_start, goal_space_end = projection_lanelet_centerline(lanelets[param['goal_lane']],
                                                                      planning_problem.goal.state_list[0].position.shapes[
@@ -146,11 +143,11 @@ def velocity_profile(lanelets, param):
     vel_max = min(vel_max, param['goal_set'].bounds[3])
 
     if vel_min <= param['v_init'] <= vel_max:
-        vel = [param['v_init'] for i in range(param['steps'])]
+        vel = [param['v_init'] for i in range(param['steps']+1)]
     elif param['v_init'] < vel_min:
-        vel = [param['v_init'] + (vel_min - param['v_init']) * t/param['steps'] for t in range(length)]
+        vel = [param['v_init'] + (vel_min - param['v_init']) * t/param['steps'] for t in range(param['steps']+1)]
     else:
-        vel = [param['v_init'] + (vel_max - param['v_init']) * t/param['steps'] for t in range(length)]
+        vel = [param['v_init'] + (vel_max - param['v_init']) * t/param['steps'] for t in range(param['steps']+1)]
 
     return vel
 
@@ -306,10 +303,16 @@ def feasible_lanelet_sequences(lanelets, free_space, param):
 
         # check if goal set has been reached
         if lanelet.lanelet_id == param['goal_lane']:
+
+            final_sets = []
+
             for d in drive_area:
-                if d['space'].intersects(param['goal_set']):
-                    final_nodes.append(expand_node(node, [], drive_area, 'none'))
-                    break
+                if param['goal_time_start'] <= d['step'] <= param['goal_time_end'] and \
+                        d['space'].intersects(param['goal_set']):
+                    final_sets.append({'space': d['space'].intersection(param['goal_set']), 'step': d['step']})
+
+            if len(final_sets) > 0:
+                final_nodes.append(expand_node(node, final_sets, drive_area, 'none'))
 
         # create child nodes
         for entry in left:
@@ -345,7 +348,7 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, param):
     right = []
 
     # loop over all time steps up to the final time
-    for i in range(x0[cnt]['step'], param['steps']-1):
+    for i in range(x0[cnt]['step'], param['steps']):
 
         # compute reachable set using maximum acceleration and deceleration
         space = reach_set_forward(drive_area[len(drive_area)-1]['space'], param)
@@ -470,155 +473,94 @@ def add_transition(transitions, space, time_step, lanelet, param):
     return transitions
 
 
+def refine_plan(seq, vel_prof, lanelets, param):
+    """refine the plan by deciding on which lanelets to be on at which points in time"""
 
-def a_star_search(free_space, cost, dist, planning_problem, lanelets, id2index, param, lane_x0, vel_prof):
-    """determine optimal lanelet for each time step using A*-search"""
+    # select best final set from all intersections with the goal set
+    min_cost = np.inf
 
-    # get goal time and set
-    goal = planning_problem.goal
-    goal_id = list(goal.lanelets_of_goal_position.values())[0][0]
-    goal_state = goal.state_list[0]
+    for fin in seq.x0:
 
-    goal_space_start, goal_space_end = projection_lanelet_centerline(lanelets[id2index[goal_id]],
-                                                                     goal_state.position.shapes[0].shapely_object)
-    v = goal_state.velocity
-    goal_space = interval2polygon([goal_space_start, v.start], [goal_space_end, v.end])
+        cost = cost_velocity_set(vel_prof[fin['step']], fin['space'])
 
-    # construct space for the initial point
-    v = planning_problem.initial_state.velocity
-    x0_space = interval2polygon([lane_x0['space']-0.01, v - 0.01], [lane_x0['space']+0.01, v + 0.01])
+        if cost < min_cost:
+            final_set = deepcopy(fin)
+            min_cost = cost
 
-    # initialize the frontier
-    frontier = []
-    frontier.append(Node(param['time_step'], [lane_x0['id']], [x0_space], vel_prof, 0, 0, cost[id2index[lane_x0['id']]]))
+    # initialize lists for storing the lanelet and the corresponding space
+    plan = [None for i in range(0, final_set['step']+1)]
+    plan[len(plan)-1] = param['goal_lane']
 
-    # loop until a solution has been found
-    while len(frontier) > 0:
+    space = [None for i in range(0, final_set['step']+1)]
+    space[len(space)-1] = final_set['space']
 
-        # sort the frontier
-        frontier.sort(key=lambda i: i.cost)
+    time_step = final_set['step']
 
-        # select node with the lowest costs
-        node = frontier.pop(0)
+    # loop backward over the lanelet sequence
+    for i in range(len(seq.lanelets)-1, 0-1, -1):
 
-        # check if goal set has been reached
-        if len(node.lanelets) >= goal_state.time_step.start and node.lanelets[len(node.lanelets)-1] == goal_id \
-                and goal_space.intersects(node.space[len(node.space)-1]):
-            return node.lanelets, node.space
+        # check if the previous lanelet is a successor or a left/right lanelet
+        is_successor = False
 
-        # create child nodes
-        if len(node.lanelets) <= goal_state.time_step.end:
-            children = create_child_nodes(node, free_space, cost, dist, lanelets, id2index, param)
-            frontier.extend(children)
+        if i > 0 and seq.lanelets[i] in lanelets[seq.lanelets[i-1]].successor:
+            is_successor = True
+
+        # initialize auxiliary variables
+        if i > 0:
+            cnt = len(seq.drive_area[i-1]) - 1
+            while seq.drive_area[i-1][cnt]['step'] >= time_step:
+                cnt = cnt - 1
+            lanelet_prev = lanelets[seq.lanelets[i - 1]]
+            dist = lanelet_prev.distance[len(lanelet_prev.distance) - 1]
+
+        transitions = []
+
+        # loop over all time steps on the current lanelet
+        for j in range(time_step-1, seq.drive_area[i][0]['step']-1, -1):
+
+            # propagate set one time step backward in time
+            space[j] = reach_set_backward(space[j+1], param)
+            space_prev = space[j]
+
+            # intersect with the previous set
+            step = j - seq.drive_area[i][0]['step']
+            space[j] = space[j].intersection(seq.drive_area[i][step]['space'])
+            plan[j] = seq.lanelets[i]
+
+            # check if it is possible to change lanelets in this time step
+            if i > 0 and seq.drive_area[i-1][cnt]['step'] == j:
+                if is_successor:
+                    if space_prev.bounds[0] <= 0:
+                        space_ = translate(space_prev, dist, 0)
+                        transitions.append(space_.intersection(seq.drive_area[i - 1][cnt]['space']))
+                else:
+                    if space[j].intersects(seq.drive_area[i - 1][cnt]['space']):
+                        transitions.append(space[j].intersection(seq.drive_area[i - 1][cnt]['space']))
+                cnt = cnt - 1
+
+        # select the best transition to take to the previous lanelet
+        if i > 0:
+
+            min_cost = np.inf
+
+            for j in range(len(transitions)):
+                cost = cost_velocity_set(vel_prof[seq.drive_area[i][0]['step']+j], transitions[j])
+                if cost < min_cost:
+                    index = j
+                    min_cost = cost
+
+            time_step = seq.drive_area[i][0]['step'] + index
+            space[time_step] = transitions[index]
+
+    return plan, space
+
+def cost_velocity_set(val, set):
+    """compute the cost of a set of velocity values with respect to a desired value"""
+
+    return max(set.bounds[1] - val, val - set.bounds[3])
 
 
-def create_child_nodes(node, free_space, cost, dist, lanelets, id2index, param):
-    """create all possible child nodes for the current node"""
-
-    # initialization
-    children = []
-    ind = len(node.lanelets)
-    lanelet = lanelets[id2index[node.lanelets[ind-1]]]
-
-    # compute reachable set using maximum acceleration and deceleration
-    space = node.space[ind-1]
-
-    dt = param['time_step']
-    a_max = param['a_max']
-
-    space1 = affine_transform(space, [1, dt, 0, 1, 0.5 * dt ** 2 * a_max, dt * a_max])
-    space2 = affine_transform(space, [1, dt, 0, 1, -0.5 * dt ** 2 * a_max, -dt * a_max])
-
-    space = space1.union(space2)
-    space = space.convex_hull
-
-    # create children resulting from staying on the same lanelet
-    space_lanelet = free_space[id2index[node.lanelets[ind-1]]][ind]
-
-    for sp in space_lanelet:
-        if sp.intersects(space):
-
-            space_new = sp.intersection(space)
-            lane_changes = node.lane_changes
-            expect_lane_changes = cost[id2index[node.lanelets[ind-1]]]
-            dist_goal = dist[id2index[node.lanelets[ind-1]]]
-
-            node_new = expand_node(node, node.lanelets[ind-1], space_new, dist_goal, lane_changes, expect_lane_changes)
-            children.append(node_new)
-
-    # create children for moving to a successor lanelet
-    space_ = translate(space, -lanelet.distance[len(lanelet.distance)-1], 0)
-
-    for suc in lanelet.successor:
-        for sp in free_space[id2index[suc]][ind]:
-            if space_.intersects(sp):
-
-                space_new = sp.intersection(space_)
-                lane_changes = node.lane_changes
-                expect_lane_changes = cost[id2index[suc]]
-                dist_goal = dist[id2index[suc]]
-
-                node_new = expand_node(node, suc, space_new, dist_goal, lane_changes, expect_lane_changes)
-                children.append(node_new)
-
-    # create children for lane change to the left
-    if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
-
-        for space_left in free_space[id2index[lanelet.adj_left]][ind]:
-            if space.intersects(space_left):
-
-                space_new = space.intersection(space_left)
-                lane_changes = node.lane_changes + 1
-                expect_lane_changes = cost[id2index[lanelet.adj_left]]
-                dist_goal = dist[id2index[lanelet.adj_left]]
-
-                node_new = expand_node(node, lanelet.adj_left, space_new, dist_goal, lane_changes, expect_lane_changes)
-                children.append(node_new)
-
-    # create children for lane change to the right
-    if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
-
-        for space_right in free_space[id2index[lanelet.adj_right]][ind]:
-            if space.intersects(space_right):
-
-                space_new = space.intersection(space_right)
-                lane_changes = node.lane_changes + 1
-                expect_lane_changes = cost[id2index[lanelet.adj_right]]
-                dist_goal = dist[id2index[lanelet.adj_right]]
-
-                node_new = expand_node(node, lanelet.adj_right, space_new, dist_goal, lane_changes, expect_lane_changes)
-                children.append(node_new)
-
-    return children
-
-def reduce_space(space, plan, lanelets, id2index, param):
-    """reduce the drivable space by propagating the goal set backward in time"""
-
-    # loop over all time steps
-    for i in range(len(space)-1, 0, -1):
-
-        # propagate reachable set backwards in time
-        dt = param['time_step']
-        a_max = param['a_max']
-
-        space1 = affine_transform(space[i], [1, -dt, 0, 1, -0.5 * dt ** 2 * a_max, dt * a_max])
-        space2 = affine_transform(space[i], [1, -dt, 0, 1, 0.5 * dt ** 2 * a_max, -dt * a_max])
-        space_new = space1.union(space2)
-        space_new = space_new.convex_hull
-
-        # shift reachable set by lanelet length if the lanelet is changed
-        if not plan[i-1] == plan[i] and not lanelets[id2index[plan[i-1]]].adj_left == plan[i] and \
-                not lanelets[id2index[plan[i-1]]].adj_right == plan[i]:
-            lanelet = lanelets[id2index[plan[i-1]]]
-            dist = lanelet.distance[len(lanelet.distance)-1]
-            space_new = translate(space_new, dist, 0)
-
-        # intersect with previous rechable set
-        space[i - 1] = space_new.intersection(space[i - 1])
-
-    return space
-
-def lanelet2global(space, plan, lanelets, id2index):
+def lanelet2global(space, plan, lanelets):
     """transform free space from lanelet coordinate system to global coordinate system"""
 
     space_xy = []
@@ -627,7 +569,7 @@ def lanelet2global(space, plan, lanelets, id2index):
     for i in range(0, len(space)):
 
         # initialization
-        lanelet = lanelets[id2index[plan[i]]]
+        lanelet = lanelets[plan[i]]
 
         lower = space[i].bounds[0]
         upper = space[i].bounds[2]
