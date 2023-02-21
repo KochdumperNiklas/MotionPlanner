@@ -551,6 +551,7 @@ def refine_plan(seq, vel_prof, lanelets, param):
 
             time_step = seq.drive_area[i][0]['step'] + index
             space[time_step] = transitions[index]
+            plan[time_step] = seq.lanelets[i-1]
 
     return plan, space
 
