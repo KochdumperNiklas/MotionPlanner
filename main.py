@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
+from highLevelPlannerNew import highLevelPlannerNew
 from highLevelPlanner import highLevelPlanner
 from lowLevelPlanner import lowLevelPlanner
 
@@ -20,12 +21,17 @@ param['s_max'] = np.deg2rad(24.0)       # maximum steering angle
 
 # select the CommonRoad scenario that should be solved
 file = "ZAM_Zip-1_19_T-1.xml"
+file = "ZAM_Tutorial-1_1_T-1.xml"
+file = "USA_US101-6_2_T-1.xml"
+file = "USA_US101-7_1_T-1.xml"
+#file = "ZAM_HW-1_1_S-1.xml"
+#file = "FRA_Sete-1_1_T-1.xml"
 
 # load the CommonRoad scenario
 scenario, planning_problem = CommonRoadFileReader(os.path.join('scenarios', file)).open()
 
 # high-level planner: decides on which lanelets to be at which points in time
-plan, space, vel = highLevelPlanner(scenario, planning_problem, param)
+plan, space, vel = highLevelPlannerNew(scenario, planning_problem, param)
 
 # low-level planner: plans a concrete trajectory for the high-level plan
 x, u = lowLevelPlanner(scenario, planning_problem, param, plan, space, vel)
@@ -46,4 +52,6 @@ for i in range(0, x.shape[1]):
     r.draw(rnd, settings)
 
     rnd.render()
+    plt.xlim([min(x[0, :]) - 20, max(x[0, :]) + 20])
+    plt.ylim([min(x[1, :]) - 20, max(x[1, :]) + 20])
     plt.pause(0.1)
