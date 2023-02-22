@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from casadi import *
 
-R = np.diag([0.01, 100.0])              # input cost matrix, penalty for inputs - [accel, steer]
-RD = np.diag([0.01, 100.0])             # input difference cost matrix, penalty for change of inputs - [accel, steer]
+R = np.diag([1, 1000.0])              # input cost matrix, penalty for inputs - [accel, steer]
+RD = np.diag([1, 1000.0])             # input difference cost matrix, penalty for change of inputs - [accel, steer]
 
 
 def lowLevelPlanner(scenario, planning_problem, param, plan, space, vel):
