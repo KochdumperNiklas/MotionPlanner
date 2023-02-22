@@ -69,10 +69,7 @@ def initialization(scenario, planning_problem, param):
     param['steps'] = planning_problem.goal.state_list[0].time_step.end
 
     # extract parameter for the goal set
-    if hasattr(planning_problem.goal.state_list[0].position, 'shapes'):
-        set = planning_problem.goal.state_list[0].position.shapes[0].shapely_object
-    else:
-        set = planning_problem.goal.state_list[0].position.shapely_object
+    set = get_shapely_object(planning_problem.goal.state_list[0].position)
 
     if planning_problem.goal.lanelets_of_goal_position is None:
         for id in lanelets.keys():
@@ -107,6 +104,31 @@ def initialization(scenario, planning_problem, param):
 
     return param, lanelets
 
+def get_shapely_object(set):
+    """construct the shapely polygon object for the given CommonRoad set"""
+
+    if hasattr(set, 'shapes'):
+        pgon = set.shapes[0].shapely_object
+        for i in range(1, len(set.shapes)):
+            pgon = pgon.union(set.shapes[i].shapely_object)
+    else:
+        pgon = set.shapely_object
+
+    return pgon
+
+def intersects_lanelet(lanelet, pgon):
+    """check if a polygon intersects the given lanelet"""
+
+    res = False
+
+    if lanelet.polygon.shapely_object.intersects(pgon):
+
+        set = lanelet.polygon.shapely_object.intersection(pgon)
+
+        if isinstance(set, Polygon):
+            res = True
+
+    return res
 
 def distance2goal(lanelets, param):
     """compute the distance to the target lanelet for each lanelet"""
@@ -187,11 +209,13 @@ def free_space_lanelet(lanelets, obstacles, param):
             # distinguish static and dynamic obstacles
             if isinstance(obs, StaticObstacle):
 
+                pgon = get_shapely_object(obs.obstacle_shape)
+
                 # check if static obstacle intersects the lanelet
-                if l.polygon.shapely_object.intersects(obs.obstacle_shape.shapely_object):
+                if intersects_lanelet(pgon):
 
                     # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
-                    dist_min, dist_max = projection_lanelet_centerline(l, obs.obstacle_shape.shapely_object)
+                    dist_min, dist_max = projection_lanelet_centerline(l, pgon)
                     offset = 0.5 * param['length'] + DIST_SAFE
 
                     # loop over all time steps
@@ -203,11 +227,13 @@ def free_space_lanelet(lanelets, obstacles, param):
                 # loop over all time steps
                 for o in obs.prediction.occupancy_set:
 
+                    pgon = get_shapely_object(o.shape)
+
                     # check if dynamic obstacles occupancy set intersects the lanelet
-                    if l.polygon.shapely_object.intersects(o.shape.shapely_object):
+                    if intersects_lanelet(l, pgon):
 
                         # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
-                        dist_min, dist_max = projection_lanelet_centerline(l, o.shape.shapely_object)
+                        dist_min, dist_max = projection_lanelet_centerline(l, pgon)
                         offset = 0.5*param['length'] + DIST_SAFE
                         occupied_space[o.time_step].append((dist_min-offset, dist_max+offset))
 
