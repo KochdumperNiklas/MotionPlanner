@@ -68,27 +68,6 @@ def initialization(scenario, planning_problem, param):
     param['v_init'] = planning_problem.initial_state.velocity
     param['steps'] = planning_problem.goal.state_list[0].time_step.end
 
-    # extract parameter for the goal set
-    set = get_shapely_object(planning_problem.goal.state_list[0].position)
-
-    if planning_problem.goal.lanelets_of_goal_position is None:
-        for id in lanelets.keys():
-            if lanelets[id].polygon.shapely_object.intersects(set):
-                param['goal_lane'] = id
-    else:
-        param['goal_lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[0][0]
-
-    param['goal_time_start'] = planning_problem.goal.state_list[0].time_step.start
-    param['goal_time_end'] = planning_problem.goal.state_list[0].time_step.end
-
-    goal_space_start, goal_space_end = projection_lanelet_centerline(lanelets[param['goal_lane']],set)
-
-    if hasattr(planning_problem.goal.state_list[0], 'velocity'):
-        v = planning_problem.goal.state_list[0].velocity
-        param['goal_set'] = interval2polygon([goal_space_start, v.start], [goal_space_end, v.end])
-    else:
-        param['goal_set'] = interval2polygon([goal_space_start, param['v_min']], [goal_space_end, param['v_max']])
-
     # determine lanelet and corresponding space for the initial state
     x0 = planning_problem.initial_state.position
 
@@ -101,6 +80,40 @@ def initialization(scenario, planning_problem, param):
 
     param['x0_lane'] = x0_id
     param['x0_set'] = 0.5 * (x0_space_start + x0_space_end)
+
+    # extract parameter for the goal set
+    param['goal_time_start'] = planning_problem.goal.state_list[0].time_step.start
+    param['goal_time_end'] = planning_problem.goal.state_list[0].time_step.end
+
+    if hasattr(planning_problem.goal.state_list[0], 'position'):
+
+        set = get_shapely_object(planning_problem.goal.state_list[0].position)
+
+        if planning_problem.goal.lanelets_of_goal_position is None:
+            for id in lanelets.keys():
+                if lanelets[id].polygon.shapely_object.intersects(set):
+                    param['goal_lane'] = id
+        else:
+            param['goal_lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[0][0]
+
+        goal_space_start, goal_space_end = projection_lanelet_centerline(lanelets[param['goal_lane']], set)
+
+    else:
+
+        if planning_problem.goal.lanelets_of_goal_position is None:
+            param['goal_lane'] = None
+            goal_space_start = -100000
+            goal_space_end = 100000
+        else:
+            param['goal_lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[0][0]
+            l = lanelets[param['goal_lane']]
+            goal_space_start, goal_space_end = projection_lanelet_centerline(l, l.polygon.shapely_object)
+
+    if hasattr(planning_problem.goal.state_list[0], 'velocity'):
+        v = planning_problem.goal.state_list[0].velocity
+        param['goal_set'] = interval2polygon([goal_space_start, v.start], [goal_space_end, v.end])
+    else:
+        param['goal_set'] = interval2polygon([goal_space_start, param['v_min']], [goal_space_end, param['v_max']])
 
     return param, lanelets
 
@@ -167,20 +180,27 @@ def distance2goal(lanelets, param):
 def velocity_profile(lanelets, param):
     """compute the desired velocity profile over time"""
 
-    # calculate distance to target lanelet for each lanelet
-    dist = distance2goal(lanelets, param)
+    # calculate minimum and maximum velocity required at the end of the time horizon
+    vel_min = param['goal_set'].bounds[1]
+    vel_max = param['goal_set'].bounds[3]
 
-    # calculate minimum and maximum distance from initial state to goal set
-    dist_min = dist[param['x0_lane']] - param['x0_set'] + param['goal_set'].bounds[0]
-    dist_max = dist[param['x0_lane']] - param['x0_set'] + param['goal_set'].bounds[2]
+    if param['goal_lane'] is not None:
 
-    # calculate minimum and maximum final velocities required to reach the goal set
-    vel_min = 2*dist_min/(param['goal_time_end']*param['time_step']) - param['v_init']
-    vel_max = 2*dist_max/(param['goal_time_start']*param['time_step']) - param['v_init']
+        # calculate distance to target lanelet for each lanelet
+        dist = distance2goal(lanelets, param)
 
-    vel_min = max(vel_min, param['goal_set'].bounds[1])
-    vel_max = min(vel_max, param['goal_set'].bounds[3])
+        # calculate minimum and maximum distance from initial state to goal set
+        dist_min = dist[param['x0_lane']] - param['x0_set'] + param['goal_set'].bounds[0]
+        dist_max = dist[param['x0_lane']] - param['x0_set'] + param['goal_set'].bounds[2]
 
+        # calculate minimum and maximum final velocities required to reach the goal set
+        vel_min_ = 2*dist_min/(param['goal_time_end']*param['time_step']) - param['v_init']
+        vel_max_ = 2*dist_max/(param['goal_time_start']*param['time_step']) - param['v_init']
+
+        vel_min = max(vel_min, vel_min_)
+        vel_max = min(vel_max, vel_max_)
+
+    # calculate velocity profile
     if vel_min <= param['v_init'] <= vel_max:
         vel = [param['v_init'] for i in range(param['steps']+1)]
     elif param['v_init'] < vel_min:
@@ -230,7 +250,7 @@ def free_space_lanelet(lanelets, obstacles, param):
                     pgon = get_shapely_object(o.shape)
 
                     # check if dynamic obstacles occupancy set intersects the lanelet
-                    if intersects_lanelet(l, pgon):
+                    if intersects_lanelet(l, pgon) and o.time_step < len(occupied_space):
 
                         # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
                         dist_min, dist_max = projection_lanelet_centerline(l, pgon)
@@ -372,13 +392,13 @@ def feasible_lanelet_sequences(lanelets, free_space, param):
         drive_area, left, right, suc, x0 = compute_drivable_area(lanelet, node.x0, free_space, prev, node.lane_prev, param)
 
         # check if goal set has been reached
-        if lanelet.lanelet_id == param['goal_lane']:
+        if param['goal_lane'] is None or lanelet.lanelet_id == param['goal_lane']:
 
             final_sets = []
 
             for d in drive_area:
                 if param['goal_time_start'] <= d['step'] <= param['goal_time_end'] and \
-                        d['space'].intersects(param['goal_set']):
+                                                            d['space'].intersects(param['goal_set']):
                     final_sets.append({'space': d['space'].intersection(param['goal_set']), 'step': d['step']})
 
             if len(final_sets) > 0:
@@ -592,7 +612,7 @@ def refine_plan(seq, vel_prof, lanelets, param):
 
     # initialize lists for storing the lanelet and the corresponding space
     plan = [None for i in range(0, final_set['step']+1)]
-    plan[len(plan)-1] = param['goal_lane']
+    plan[len(plan)-1] = seq.lanelets[len(seq.lanelets)-1]
 
     space = [None for i in range(0, final_set['step']+1)]
     space[len(space)-1] = final_set['space']
