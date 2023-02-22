@@ -62,21 +62,35 @@ def initialization(scenario, planning_problem, param):
     # store useful properties in parameter dictionary
     param['time_step'] = scenario.dt
     param['v_max'] = 100
+    param['v_min'] = 0
 
     planning_problem = list(planning_problem.planning_problem_dict.values())[0]
     param['v_init'] = planning_problem.initial_state.velocity
     param['steps'] = planning_problem.goal.state_list[0].time_step.end
 
     # extract parameter for the goal set
-    param['goal_lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[0][0]
+    if hasattr(planning_problem.goal.state_list[0].position, 'shapes'):
+        set = planning_problem.goal.state_list[0].position.shapes[0].shapely_object
+    else:
+        set = planning_problem.goal.state_list[0].position.shapely_object
+
+    if planning_problem.goal.lanelets_of_goal_position is None:
+        for id in lanelets.keys():
+            if lanelets[id].polygon.shapely_object.intersects(set):
+                param['goal_lane'] = id
+    else:
+        param['goal_lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[0][0]
+
     param['goal_time_start'] = planning_problem.goal.state_list[0].time_step.start
     param['goal_time_end'] = planning_problem.goal.state_list[0].time_step.end
 
-    goal_space_start, goal_space_end = projection_lanelet_centerline(lanelets[param['goal_lane']],
-                                                                     planning_problem.goal.state_list[0].position.shapes[
-                                                                         0].shapely_object)
-    v = planning_problem.goal.state_list[0].velocity
-    param['goal_set'] = interval2polygon([goal_space_start, v.start], [goal_space_end, v.end])
+    goal_space_start, goal_space_end = projection_lanelet_centerline(lanelets[param['goal_lane']],set)
+
+    if hasattr(planning_problem.goal.state_list[0], 'velocity'):
+        v = planning_problem.goal.state_list[0].velocity
+        param['goal_set'] = interval2polygon([goal_space_start, v.start], [goal_space_end, v.end])
+    else:
+        param['goal_set'] = interval2polygon([goal_space_start, param['v_min']], [goal_space_end, param['v_max']])
 
     # determine lanelet and corresponding space for the initial state
     x0 = planning_problem.initial_state.position
@@ -159,6 +173,7 @@ def free_space_lanelet(lanelets, obstacles, param):
 
     free_space_all = []
     v_max = param['v_max']
+    v_min = param['v_min']
 
     # loop over all lanelets
     for id in lanelets.keys():
@@ -210,29 +225,36 @@ def free_space_lanelet(lanelets, obstacles, param):
                 space = []
 
                 if lower[0] > l.distance[0]:
-                    pgon = interval2polygon([l.distance[0], -v_max], [lower[0], v_max])
+                    pgon = interval2polygon([l.distance[0], v_min], [lower[0], v_max])
                     space.append(pgon)
 
                 cnt = 0
+                finished = False
 
                 while cnt < len(o)-1:
 
                     ind = cnt
+                    up = upper[cnt]
 
-                    for i in range(cnt, len(o)):
-                        if lower[i] < upper[cnt]:
+                    for i in range(cnt+1, len(o)):
+                        if lower[i] < up:
                             ind = i
+                            up = max(up, upper[i])
 
-                    pgon = interval2polygon([upper[ind], -v_max], [lower[ind+1], v_max])
+                    if ind < len(lower)-1:
+                        pgon = interval2polygon([up, v_min], [lower[ind+1], v_max])
+                    else:
+                        pgon = interval2polygon([up, v_min], [l.distance[len(l.distance)-1], v_max])
+                        finished = True
                     space.append(pgon)
                     cnt = ind + 1
 
-                if max(upper) < l.distance[len(l.distance)-1]:
-                    pgon = interval2polygon([max(upper), -v_max], [l.distance[len(l.distance)-1], v_max])
+                if not finished and max(upper) < l.distance[len(l.distance)-1]:
+                    pgon = interval2polygon([max(upper), v_min], [l.distance[len(l.distance)-1], v_max])
                     space.append(pgon)
 
             else:
-                pgon = interval2polygon([l.distance[0], -v_max], [l.distance[len(l.distance)-1], v_max])
+                pgon = interval2polygon([l.distance[0], v_min], [l.distance[len(l.distance)-1], v_max])
                 space = [pgon]
 
             free_space.append(space)
