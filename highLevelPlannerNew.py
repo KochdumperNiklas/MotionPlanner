@@ -38,6 +38,9 @@ def highLevelPlannerNew(scenario, planning_problem, param):
     # refine the plan: decide on which lanelet to be on for all time steps
     plan, space = refine_plan(seq, vel_prof, lanelets, param)
 
+    # shrink space by intersecting with the forward reachable set
+    space = reduce_space(space, plan, lanelets, param)
+
     # extract the safe velocity intervals at each time point
     vel = []
     for s in space:
@@ -191,7 +194,7 @@ def free_space_lanelet(lanelets, obstacles, param):
                         # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
                         dist_min, dist_max = projection_lanelet_centerline(l, o.shape.shapely_object)
                         offset = 0.5*param['length'] + DIST_SAFE
-                        occupied_space[o.time_step-1].append((dist_min-offset, dist_max+offset))
+                        occupied_space[o.time_step].append((dist_min-offset, dist_max+offset))
 
         # unite occupied spaces that belong to the same time step to obtain free space
         free_space = []
@@ -272,6 +275,25 @@ def interval2polygon(lb, ub):
 
     return Polygon([(lb[0], lb[1]), (lb[0], ub[1]), (ub[0], ub[1]), (ub[0], lb[1])])
 
+
+def reduce_space(space, plan, lanelets, param):
+    """reduce the space of the drivable area by intersecting with the forward reachable set"""
+
+    # loop over all time steps
+    for i in range(len(space)-1):
+
+        # compute forward reachable set
+        space_ = reach_set_forward(space[i], param)
+
+        # shift set if moving on to a successor lanelet
+        if not plan[i+1] == plan[i] and plan[i+1] in lanelets[plan[i]].successor:
+            dist = lanelets[plan[i]].distance
+            space_ = translate(space_, -dist[len(dist)-1], 0)
+
+        # intersect forward reachable set with drivable area
+        space[i+1] = space[i+1].intersection(space_)
+
+    return space
 
 def feasible_lanelet_sequences(lanelets, free_space, param):
     """determine all feasible sequences of lanelets to drive on that reach the goal state"""
@@ -497,7 +519,7 @@ def refine_plan(seq, vel_prof, lanelets, param):
     time_step = final_set['step']
 
     # loop backward over the lanelet sequence
-    for i in range(len(seq.lanelets)-1, 0-1, -1):
+    for i in range(len(seq.lanelets)-1, -1, -1):
 
         # check if the previous lanelet is a successor or a left/right lanelet
         is_successor = False
@@ -532,10 +554,12 @@ def refine_plan(seq, vel_prof, lanelets, param):
                 if is_successor:
                     if space_prev.bounds[0] <= 0:
                         space_ = translate(space_prev, dist, 0)
-                        transitions.append(space_.intersection(seq.drive_area[i - 1][cnt]['space']))
+                        space_ = space_.intersection(seq.drive_area[i - 1][cnt]['space'])
+                        transitions.append({'space': space_, 'step': j})
                 else:
                     if space[j].intersects(seq.drive_area[i - 1][cnt]['space']):
-                        transitions.append(space[j].intersection(seq.drive_area[i - 1][cnt]['space']))
+                        space_ = space[j].intersection(seq.drive_area[i - 1][cnt]['space'])
+                        transitions.append({'space': space_, 'step': j})
                 cnt = cnt - 1
 
         # select the best transition to take to the previous lanelet
@@ -543,14 +567,14 @@ def refine_plan(seq, vel_prof, lanelets, param):
 
             min_cost = np.inf
 
-            for j in range(len(transitions)):
-                cost = cost_velocity_set(vel_prof[seq.drive_area[i][0]['step']+j], transitions[j])
+            for t in transitions:
+                cost = cost_velocity_set(vel_prof[t['step']], t['space'])
                 if cost < min_cost:
-                    index = j
+                    time_step = t['step']
+                    space_ = t['space']
                     min_cost = cost
 
-            time_step = seq.drive_area[i][0]['step'] + index
-            space[time_step] = transitions[index]
+            space[time_step] = space_
             plan[time_step] = seq.lanelets[i-1]
 
     return plan, space
