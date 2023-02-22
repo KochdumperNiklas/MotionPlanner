@@ -126,9 +126,11 @@ def optimal_control_problem(poly, vel, x0, ref_traj, param):
     # constraint (trajectory has to be inside the safe driving corridor)
     for i in range(len(poly)):
 
-        A = poly[i][0]
-        b = poly[i][1]
-        opti.subject_to(mtimes(A, x[0:2, i]) <= b)
+        if i > 1:
+            A = poly[i][0]
+            b = poly[i][1]
+
+            opti.subject_to(mtimes(A, x[0:2, i]) <= b)
 
         opti.subject_to(x[2, i] >= vel[i][0])
         opti.subject_to(x[2, i] <= vel[i][1])
