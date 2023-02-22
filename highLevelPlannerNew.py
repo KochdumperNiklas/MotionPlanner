@@ -343,7 +343,7 @@ def feasible_lanelet_sequences(lanelets, free_space, param):
         else:
             prev = node.drive_area[len(node.drive_area)-1]
 
-        drive_area, left, right, suc = compute_drivable_area(lanelet, node.x0, free_space, prev, node.lane_prev, param)
+        drive_area, left, right, suc, x0 = compute_drivable_area(lanelet, node.x0, free_space, prev, node.lane_prev, param)
 
         # check if goal set has been reached
         if lanelet.lanelet_id == param['goal_lane']:
@@ -359,6 +359,9 @@ def feasible_lanelet_sequences(lanelets, free_space, param):
                 final_nodes.append(expand_node(node, final_sets, drive_area, 'none'))
 
         # create child nodes
+        for entry in x0:
+            queue.append(expand_node(node, entry, drive_area, node.lane_prev))
+
         for entry in left:
             if len(entry) > MIN_LANE_CHANGE:
                 queue.append(expand_node(node, entry, drive_area, 'right'))
@@ -390,6 +393,7 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, param):
     successors = []
     left = []
     right = []
+    x0_new = []
 
     # loop over all time steps up to the final time
     for i in range(x0[cnt]['step'], param['steps']):
@@ -417,8 +421,11 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, param):
             if sp.intersects(space):
                 tmp.append(sp.intersection(space))
 
+        # check if driveable area intersects multiple free space segments (can happen if another car comes into lane)
         if len(tmp) > 1:
-            raise Exception('High-level planning failed!')
+            space = tmp[0]
+            for k in range(1, len(tmp)):
+                x0_new.append(create_branch(tmp[k], i+1, free_space, x0[cnt:], lanelet.lanelet_id, param))
         elif len(tmp) == 0:
             break
         else:
@@ -441,16 +448,16 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, param):
         if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
 
             for space_left in free_space[lanelet.adj_left][i+1]:
-                if space.intersects(space_left) and not(lane_prev == 'left' and prev[cnt_prev]['step'] == i+1 and
-                                                                    space_left.intersects(prev[cnt_prev]['space'])):
+                if space.intersects(space_left) and not(lane_prev == 'left' and cnt_prev < len(prev) and
+                                  prev[cnt_prev]['step'] == i+1 and space_left.intersects(prev[cnt_prev]['space'])):
                     left = add_transition(left, space.intersection(space_left), i+1, lanelet.adj_left, param)
 
         # check if it is possible to make a lane change to the right
         if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
 
             for space_right in free_space[lanelet.adj_right][i + 1]:
-                if space.intersects(space_right) and not(lane_prev == 'right' and prev[cnt_prev]['step'] == i+1 and
-                                                                    space_right.intersects(prev[cnt_prev]['space'])):
+                if space.intersects(space_right) and not(lane_prev == 'right' and cnt_prev < len(prev) and
+                                   prev[cnt_prev]['step'] == i+1 and space_right.intersects(prev[cnt_prev]['space'])):
                     right = add_transition(right, space.intersection(space_right), i+1, lanelet.adj_right, param)
 
         # update counter for drivable area on previous lanelet
@@ -460,7 +467,7 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, param):
         # store drivable area
         drive_area.append({'space': space, 'step': i+1})
 
-    return drive_area, left, right, successors
+    return drive_area, left, right, successors, x0_new
 
 def reach_set_forward(space, param):
     """compute the forward reachable set for one time step using maximum acceleration and deceleration"""
@@ -510,11 +517,37 @@ def add_transition(transitions, space, time_step, lanelet, param):
             found = True
             break
 
-    # create a new transition if the current transition could not be added to any exising transition
+    # create a new transition if the current transition could not be added to any existing transition
     if not found:
         transitions.append([{'space': space, 'step': time_step, 'lanelet': lanelet}])
 
     return transitions
+
+
+def create_branch(space, time_step, free_space, x0, lanelet, param):
+    """create a new seach path if the driveable area intersects multiple free space segments"""
+
+    # create first element
+    x0_new = [{'space': space, 'step': time_step, 'lanelet': lanelet}]
+
+    # loop over all possible transitions from the previous lanelet
+    for x in x0:
+
+        # compute forward reachable set
+        space = reach_set_forward(space, param)
+
+        # intersect with free space
+        for fs in free_space[lanelet][time_step]:
+            if fs.intersects(space):
+                space = fs.intersection(space)
+
+        # check if space intersects the space from the transition
+        if x['space'].intersects(space):
+            x0_new.append(x)
+
+        time_step = time_step + 1
+
+    return x0_new
 
 
 def refine_plan(seq, vel_prof, lanelets, param):
