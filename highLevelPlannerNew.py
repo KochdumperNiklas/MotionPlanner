@@ -38,6 +38,9 @@ def highLevelPlannerNew(scenario, planning_problem, param):
     # refine the plan: decide on which lanelet to be on for all time steps
     plan, space = refine_plan(seq, vel_prof, lanelets, param)
 
+    # determine drivable space for lane changes
+    space_all, time_lane = space_lane_changes(space, plan, lanelets, free_space)
+
     # shrink space by intersecting with the forward reachable set
     space = reduce_space(space, plan, lanelets, param)
 
@@ -49,7 +52,7 @@ def highLevelPlannerNew(scenario, planning_problem, param):
     # transform space from lanelet coordinate system to global coordinate system
     space_xy = lanelet2global(space, plan, lanelets)
 
-    return plan, space_xy, vel
+    return plan, space_xy, vel, space_all, time_lane
 
 
 def initialization(scenario, planning_problem, param):
@@ -679,6 +682,97 @@ def refine_plan(seq, vel_prof, lanelets, param):
             plan[time_step] = seq.lanelets[i-1]
 
     return plan, space
+
+def space_lane_changes(space, plan, lanelets, free_space):
+    """compute the drivable space at a lanelet change in the global coordinate frame"""
+
+    # determine indices for all lane changes
+    plan = np.asarray(plan)
+    ind = np.where(plan[:-1] != plan[1:])[0]
+
+    time = [[] for i in range(len(ind))]
+
+    # get drivable area (without space for lane changes) in the global coordinate frame
+    space_glob = lanelet2global(space, plan, lanelets)
+
+    # loop over all lane changes
+    for i in range(len(ind)):
+
+        lanelet_1 = lanelets[plan[ind[i]]]
+        lanelet_2 = lanelets[plan[ind[i]+1]]
+
+        # loop backward in time until previous lane change
+        if i == 0:
+            start = 0
+        else:
+            start = ind[i-1]
+
+        for j in range(ind[i], start-1, -1):
+
+            if plan[ind[i]+1] in lanelet_1.successor:
+
+                if space[j].bounds[2] >= lanelet_1.distance[-1]:
+
+                    for f in free_space[lanelet_2.lanelet_id][j]:
+                        if f.bounds[0] <= 0:
+                            pgon = lanelet2global([f], [lanelet_2.lanelet_id], lanelets)
+                            space_glob[j] = space_glob[j].union(pgon[0])
+                            time[i].append(j)
+                else:
+                    break
+
+            else:
+                intersection = False
+
+                for f in free_space[lanelet_2.lanelet_id][j]:
+                    if f.intersects(space[j]):
+                        pgon = lanelet2global([f], [lanelet_2.lanelet_id], lanelets)
+                        space_glob[j] = space_glob[j].union(pgon[0])
+                        intersection = True
+                        time[i].append(j)
+
+                if not intersection:
+                    break
+
+        # loop forward in time until the next lane change
+        if i == len(ind)-1:
+            end = len(space)-1
+        else:
+            end = ind[i+1]
+
+        for j in range(ind[i], end):
+
+            if plan[ind[i]+1] in lanelet_1.successor:
+
+                if space[j].bounds[2] <= 0:
+
+                    for f in free_space[lanelet_1.lanelet_id][j]:
+                        if f.bounds[2] >= lanelet_1.distance[-1]:
+                            pgon = lanelet2global([f], [lanelet_1.lanelet_id], lanelets)
+                            space_glob[j] = space_glob[j].union(pgon[0])
+                            time[i].append(j)
+                else:
+                    break
+
+            else:
+                intersection = False
+
+                for f in free_space[lanelet_1.lanelet_id][j]:
+                    if f.intersects(space[j]):
+                        pgon = lanelet2global([f], [lanelet_1.lanelet_id], lanelets)
+                        space_glob[j] = space_glob[j].union(pgon[0])
+                        intersection = True
+                        time[i].append(j)
+
+                if not intersection:
+                    break
+
+        # sort time steps where lane change is possible
+        time[i] = np.asarray(time[i])
+        time[i] = np.sort(time[i])
+
+    return space_glob, time
+
 
 def cost_velocity_set(val, set):
     """compute the cost of a set of velocity values with respect to a desired value"""
