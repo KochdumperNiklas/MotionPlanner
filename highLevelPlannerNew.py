@@ -17,6 +17,9 @@ DIST_SAFE = 2
 # minimum number of consecutive time steps required to perform a lane change
 MIN_LANE_CHANGE = 2
 
+# desired number of time steps for performing a lane change
+DES_LANE_CHANGE = 20
+
 def highLevelPlannerNew(scenario, planning_problem, param):
     """decide on which lanelets to be at all points in time"""
 
@@ -49,10 +52,13 @@ def highLevelPlannerNew(scenario, planning_problem, param):
     for s in space:
         vel.append((s.bounds[1], s.bounds[3]))
 
+    # compute a desired reference trajectory
+    ref_traj = reference_trajectory(plan, space, vel, time_lane, param, lanelets)
+
     # transform space from lanelet coordinate system to global coordinate system
     space_xy = lanelet2global(space, plan, lanelets)
 
-    return plan, space_xy, vel, space_all, time_lane
+    return plan, space_xy, vel, space_all, ref_traj
 
 
 def initialization(scenario, planning_problem, param):
@@ -71,6 +77,9 @@ def initialization(scenario, planning_problem, param):
     param['v_init'] = planning_problem.initial_state.velocity
     param['steps'] = planning_problem.goal.state_list[0].time_step.end
 
+    # maximum length of the car independent of the orientation
+    param['length_max'] = np.sqrt(param['length']**2 + param['width']**2)
+
     # determine lanelet and corresponding space for the initial state
     x0 = planning_problem.initial_state.position
 
@@ -83,6 +92,8 @@ def initialization(scenario, planning_problem, param):
 
     param['x0_lane'] = x0_id
     param['x0_set'] = 0.5 * (x0_space_start + x0_space_end)
+    param['x0'] = x0
+    param['orientation'] = planning_problem.initial_state.orientation
 
     # extract parameter for the goal set
     param['goal_time_start'] = planning_problem.goal.state_list[0].time_step.start
@@ -239,7 +250,7 @@ def free_space_lanelet(lanelets, obstacles, param):
 
                     # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
                     dist_min, dist_max = projection_lanelet_centerline(l, pgon)
-                    offset = 0.5 * param['length'] + DIST_SAFE
+                    offset = 0.5 * param['length_max'] + DIST_SAFE
 
                     # loop over all time steps
                     for i in range(param['steps']+1):
@@ -257,7 +268,7 @@ def free_space_lanelet(lanelets, obstacles, param):
 
                         # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
                         dist_min, dist_max = projection_lanelet_centerline(l, pgon)
-                        offset = 0.5*param['length'] + DIST_SAFE
+                        offset = 0.5*param['length_max'] + DIST_SAFE
                         occupied_space[o.time_step].append((dist_min-offset, dist_max+offset))
 
         # unite occupied spaces that belong to the same time step to obtain free space
@@ -773,6 +784,146 @@ def space_lane_changes(space, plan, lanelets, free_space):
 
     return space_glob, time
 
+
+def reference_trajectory(plan, space, vel, time_lane, param, lanelets):
+    """compute a desired reference trajectory"""
+
+    # compute suitable velocity profile
+    v = desired_velocity(vel)
+
+    # compute corresponding position profile
+    x = [space[0].bounds[0]]
+
+    for i in range(len(v)-1):
+        x.append(x[-1] + v[i] * param['time_step'])
+
+    # determine indices for all lane changes
+    plan = np.asarray(plan)
+    ind = np.where(plan[:-1] != plan[1:])[0]
+
+    lanes = [plan[i] for i in ind]
+    lanes.append(plan[ind[-1]+1])
+
+    # loop over all lanelets the car drives on
+    dist = 0
+    step = 0
+    tmp = [[] for i in range(len(x))]
+    center_traj = [deepcopy(tmp) for i in range(len(lanes))]
+
+    for j in range(len(lanes)):
+
+        # loop over all time steps
+        for i in range(step, len(x)):
+
+            d = x[i] - dist
+            lanelet = lanelets[lanes[j]]
+
+            if d > lanelet.distance[-1]:
+                if j < len(lanes)-1 and lanes[j+1] in lanelet.successor:
+                    dist = dist + lanelet.distance[-1]
+                    step = i
+                    break
+
+            for k in range(1, len(lanelet.distance)):
+                if d <= lanelet.distance[k]:
+                    p1 = lanelet.center_vertices[k-1, :]
+                    p2 = lanelet.center_vertices[k, :]
+                    p = p1 + (p2 - p1) * (d - lanelet.distance[k-1])/(lanelet.distance[k] - lanelet.distance[k-1])
+                    center_traj[j][i] = np.transpose(p)
+                    break
+
+    # store reference trajectory (without considering lane changes)
+    ref_traj = np.zeros((2, len(x)))
+    cnt = 0
+
+    for i in range(0, len(plan)):
+        if len(center_traj[cnt][i]) == 0:
+            ref_traj[:, i] = center_traj[cnt+1][i]
+        else:
+            ref_traj[:, i] = center_traj[cnt][i]
+        if i < len(plan)-1 and plan[i] != plan[i+1]:
+            cnt = cnt + 1
+
+    # loop over all lane changes
+    for i in range(len(ind)):
+
+        # check if it is a lane change or just a change onto a successor lanelet
+        if plan[ind[i]+1] not in lanelets[plan[ind[i]]].successor:
+
+            # compute start and end time step for the lane change
+            ind_start = max(time_lane[i][0], ind[i] - np.floor(DES_LANE_CHANGE/2)).astype(int)
+            ind_end = max(time_lane[i][-1], ind[i] + np.floor(DES_LANE_CHANGE/2)).astype(int)
+
+            # interpolate between the center trajectories for the two lanes
+            for j in range(ind_start, ind_end+1):
+
+                w = 1/(1 + np.exp(-5*(2*((j - ind_start)/(ind_end - ind_start))-1)))
+
+                p = (1-w) * center_traj[i][j] + w * center_traj[i+1][j]
+                ref_traj[:, j] = p
+
+    return ref_traj
+
+
+def desired_velocity(vel):
+    """compute a desired velocity for each time step"""
+
+    # select initial and final velocity
+    v_init = vel[0][0]
+
+    if vel[-1][0] <= v_init <= vel[-1][1]:
+        v_end = v_init
+    elif v_init < vel[-1][0]:
+        v_end = vel[-1][0]
+    else:
+        v_end = vel[-1][1]
+
+    v = linear_interpolation(v_init, v_end, len(vel))
+
+    # loop until desired velocity profile if contained in valid velocity set
+    v = velocity_recursive(v, vel)
+
+    return v
+
+def velocity_recursive(v, vel):
+    """recursive function to refine the velocity profile"""
+
+    # loop over all time steps
+    dmax = 0
+    ind = None
+
+    for i in range(len(v)):
+
+        if vel[i][0] > v[i]:
+            d = vel[i][0] - v[i]
+            if d > dmax:
+                ind = i
+                dmax = d
+        elif vel[i][1] < v[i]:
+            d = v[i] - vel[i][1]
+            if d > dmax:
+                ind = i
+                dmax = d
+
+    # recursively refine the velocity profile
+    if ind is not None:
+        v1 = linear_interpolation(v[0], v[ind], ind)
+        v1 = velocity_recursive(v1, vel[:ind])
+
+        v2 = linear_interpolation(v[ind], v[-1], len(v) - ind)
+        v2 = velocity_recursive(v2, vel[ind:])
+
+        v = v1 + v2[:-2]
+
+    return v
+
+
+def linear_interpolation(x_start, x_end, length):
+    """linear interpolation between x_start and x_end"""
+
+    d = (x_end - x_start)/length
+
+    return [x_start + d * i for i in range(length)]
 
 def cost_velocity_set(val, set):
     """compute the cost of a set of velocity values with respect to a desired value"""
