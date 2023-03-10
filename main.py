@@ -10,6 +10,7 @@ import os
 from highLevelPlannerNew import highLevelPlannerNew
 from highLevelPlanner import highLevelPlanner
 from lowLevelPlanner import lowLevelPlanner
+from lowLevelPlannerNew import lowLevelPlannerNew
 
 # parameter for the car
 param = {}
@@ -32,10 +33,10 @@ file = "ZAM_Zip-1_19_T-1.xml"
 scenario, planning_problem = CommonRoadFileReader(os.path.join('scenarios', file)).open()
 
 # high-level planner: decides on which lanelets to be at which points in time
-plan, space, vel, space_all, time_lane = highLevelPlannerNew(scenario, planning_problem, param)
+plan, space, vel, space_all, ref_traj = highLevelPlannerNew(scenario, planning_problem, param)
 
 # low-level planner: plans a concrete trajectory for the high-level plan
-x, u = lowLevelPlanner(scenario, planning_problem, param, plan, space, vel)
+x, u = lowLevelPlannerNew(scenario, planning_problem, param, plan, space, vel, space_all, ref_traj)
 
 # visualization
 plt.figure(figsize=(25, 10))
