@@ -36,7 +36,7 @@ def lowLevelPlannerNew(scenario, planning_problem, param, plan, space, vel, spac
         node = queue.pop(0)
 
         # check if motion primitive is collision free
-        if collision_check(node, space, vel):
+        if collision_check(node, space_all, vel, param):
 
             # check if goal set has been reached
             if goal_check(node, param):
@@ -53,25 +53,27 @@ def collision_check(node, space, vel, param):
     """check if a motion primitive is collision free"""
 
     # check if the maximum time is exceeded
-    if node.x.shape[1]-1 > param['goal_time_end']:
+    ind = node.x.shape[1] - node.primitives[-1].x.shape[1]
+
+    if ind > param['goal_time_end']:
         return False
 
     # check if the final velocity is inside the valid range
-    v_final = node.x[2, -1]
+    index = min(node.x.shape[1]-1, len(vel)-1)
 
-    if v_final <= vel[node.x.shape[1]-1][0] or v_final >= vel[node.x.shape[1]-1][1]:
+    v_final = node.x[2, index]
+
+    if v_final <= vel[index][0] or v_final >= vel[index][1]:
         return False
 
     # get state at the before the last primitive
-    x = node.x[:, -node.primitives[-1].x.shape[1]]
+    x = node.x[:, ind]
 
     # loop over all time steps
     for o in node.primitives[-1].occ:
+        time = int(o['time']/param['time_step'])
         pgon = affine_transform(o['space'], [np.cos(x[3]), -np.sin(x[3]), np.sin(x[3]), np.cos(x[3]), x[0], x[1]])
-        plt.plot(*pgon.exterior.xy)
-        plt.plot(*space[int(o['time'])].exterior.xy)
-        plt.show()
-        if pgon.intersects(space[o['time']]):
+        if ind + time < len(space) and not space[ind + time].contains(pgon):
             return False
 
     return True
@@ -80,12 +82,12 @@ def goal_check(node, param):
     """check if the goal set has been reached"""
 
     # get index of the state at before the last primitive
-    ind = x.shape[1] - node.primitives[-1].x.shape[1]
+    ind = node.x.shape[1] - node.primitives[-1].x.shape[1]
 
     # loop over all time steps
-    for i in range(primitives[-1].x.shape[1]):
-        if param['goal_time_start'] <= ind + 1 <= param['goal_time_end']:
-            p = Point(primitive.x[0, ind + i], primitive.x[1, ind + i])
+    for i in range(ind, node.x.shape[1]):
+        if param['goal_time_start'] <= i <= param['goal_time_end']:
+            p = Point(node.x[0, i], node.x[1, i])
             if param['goal_set'] is None or param['goal_set'].contains(p):
                 return True
 
@@ -110,8 +112,11 @@ def extract_control_inputs(node):
     u = []
 
     for i in range(len(node.primitives)):
-        u_new = np.transpose(node.primitive[i].u) @ np.ones((1, node.primitive[i].x.shape[1]-1))
-        u = np.concatenate((u, u_new), axis=1)
+        u_new = np.expand_dims(node.primitives[i].u, axis=1) @ np.ones((1, node.primitives[i].x.shape[1]-1))
+        if i == 0:
+            u = u_new
+        else:
+            u = np.concatenate((u, u_new), axis=1)
 
 
 def expand_node(node, primitive, ref_traj):
@@ -124,10 +129,15 @@ def expand_node(node, primitive, ref_traj):
     phi = node.x[3, -1]
     T = scipy.linalg.block_diag(np.array([[np.cos(phi), -np.sin(phi)], [np.sin(phi), np.cos(phi)]]), np.eye(2))
     x_ = T @ primitive.x + np.array([[node.x[0, -1]], [node.x[1, -1]], [0], [phi]])
-    x = np.concatenate((node.x[:, :-2], x_), axis=1)
+    x = np.concatenate((node.x[:, :-1], x_), axis=1)
 
     # compute costs
-    cost = np.sum((ref_traj[:, x.shape[1]-1] - x[0:2, -1])**2) + 1000/len(primitives)
+    if x.shape[1] <= ref_traj.shape[1]:
+        ind = x.shape[1] - 1
+    else:
+        ind = ref_traj.shape[1] - 1
+
+    cost = np.sum((ref_traj[:, ind] - x[0:2, ind])**2) + 1000/len(primitives)
 
     return Node(primitives, x, cost)
 
