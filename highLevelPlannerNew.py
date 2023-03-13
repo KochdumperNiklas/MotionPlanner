@@ -209,11 +209,29 @@ def velocity_profile(lanelets, param):
         dist_max = dist[param['x0_lane']] - param['x0_set'] + param['goal_set'].bounds[2]
 
         # calculate minimum and maximum final velocities required to reach the goal set using a linear velocity profile
-        vel_min_ = 2*dist_max/(param['goal_time_end']*param['time_step']) - param['v_init']
-        vel_max_ = 2*dist_min/(param['goal_time_start']*param['time_step']) - param['v_init']
+        vel_min_ = 2*dist_min/(param['goal_time_end']*param['time_step']) - param['v_init']
+        vel_max_ = 2*dist_max/(param['goal_time_start']*param['time_step']) - param['v_init']
 
-        vel_min = max(vel_min, vel_min_)
-        vel_max = min(vel_max, vel_max_)
+        # use a quadratic velocity profile if a linear one is not sufficient
+        if vel_min_ > vel_max or vel_max_ < vel_min:
+            if vel_max_ < vel_min:
+                vel_final = vel_min
+                x_final = dist_max
+                t_final = param['goal_time_start']
+            else:
+                vel_final = vel_min
+                x_final = dist_min
+                t_final = param['goal_time_end']
+
+            b = -5.0/6.0 * (x_final - 0.5*t_final*(param['v_init'] + vel_final))/t_final**3
+            a = (vel_final - param['v_init'] - b * t_final ** 2)/t_final
+
+            vel = [param['v_init'] + a * t + b * t**2 for t in range(param['steps']+1)]
+
+            return vel
+        else:
+            vel_min = max(vel_min, vel_min_)
+            vel_max = min(vel_max, vel_max_)
 
     # calculate velocity profile
     if vel_min <= param['v_init'] <= vel_max:
