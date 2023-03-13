@@ -208,9 +208,9 @@ def velocity_profile(lanelets, param):
         dist_min = dist[param['x0_lane']] - param['x0_set'] + param['goal_set'].bounds[0]
         dist_max = dist[param['x0_lane']] - param['x0_set'] + param['goal_set'].bounds[2]
 
-        # calculate minimum and maximum final velocities required to reach the goal set
-        vel_min_ = 2*dist_min/(param['goal_time_end']*param['time_step']) - param['v_init']
-        vel_max_ = 2*dist_max/(param['goal_time_start']*param['time_step']) - param['v_init']
+        # calculate minimum and maximum final velocities required to reach the goal set using a linear velocity profile
+        vel_min_ = 2*dist_max/(param['goal_time_end']*param['time_step']) - param['v_init']
+        vel_max_ = 2*dist_min/(param['goal_time_start']*param['time_step']) - param['v_init']
 
         vel_min = max(vel_min, vel_min_)
         vel_max = min(vel_max, vel_max_)
@@ -250,7 +250,7 @@ def free_space_lanelet(lanelets, obstacles, param):
                 pgon = get_shapely_object(obs.obstacle_shape)
 
                 # check if static obstacle intersects the lanelet
-                if intersects_lanelet(pgon):
+                if intersects_lanelet(l, pgon):
 
                     # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
                     dist_min, dist_max = projection_lanelet_centerline(l, pgon)
@@ -863,8 +863,8 @@ def reference_trajectory(plan, space, vel, time_lane, param, lanelets):
     plan = np.asarray(plan)
     ind = np.where(plan[:-1] != plan[1:])[0]
 
-    lanes = [plan[i] for i in ind]
-    lanes.append(plan[ind[-1]+1])
+    lanes = [plan[i+1] for i in ind]
+    lanes = [plan[0]] + lanes
 
     # loop over all lanelets the car drives on
     dist = 0
@@ -963,21 +963,23 @@ def velocity_recursive(v, vel):
             if d > dmax:
                 ind = i
                 dmax = d
+                vd = vel[i][0]
         elif vel[i][1] < v[i]:
             d = v[i] - vel[i][1]
             if d > dmax:
                 ind = i
                 dmax = d
+                vd = vel[i][1]
 
     # recursively refine the velocity profile
     if ind is not None:
-        v1 = linear_interpolation(v[0], v[ind], ind)
-        v1 = velocity_recursive(v1, vel[:ind])
+        v1 = linear_interpolation(v[0], vd, ind + 1)
+        v1 = velocity_recursive(v1, vel[:ind+1])
 
-        v2 = linear_interpolation(v[ind], v[-1], len(v) - ind)
+        v2 = linear_interpolation(vd, v[-1], len(v) - ind)
         v2 = velocity_recursive(v2, vel[ind:])
 
-        v = v1 + v2[:-2]
+        v = v1[:-1] + v2
 
     return v
 
@@ -985,7 +987,7 @@ def velocity_recursive(v, vel):
 def linear_interpolation(x_start, x_end, length):
     """linear interpolation between x_start and x_end"""
 
-    d = (x_end - x_start)/length
+    d = (x_end - x_start)/(length-1)
 
     return [x_start + d * i for i in range(length)]
 
@@ -1071,10 +1073,7 @@ def lanelet2global(space, plan, lanelets):
 
         # unite with polygons from predecessor and successor lanelets
         for p in pgons:
-            try:
-                pgon = union_robust(pgon, p)
-            except:
-                test = 1
+            pgon = union_robust(pgon, p)
 
         space_xy.append(pgon)
 
