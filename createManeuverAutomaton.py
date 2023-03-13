@@ -6,7 +6,7 @@ from ManeuverAutomaton import ManeuverAutomaton
 
 # control inputs
 accelerations = [-1.2, -0.8, -0.4, 0, 0.4, 0.8, 1.2]
-steer = [-0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4]
+steer = [-0.4, -0.3, -0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2, 0.3, 0.4]
 
 # velocity range
 v_start = 0

@@ -39,8 +39,10 @@ def lowLevelPlannerNew(scenario, planning_problem, param, plan, space, vel, spac
         if collision_check(node, space_all, vel, param):
 
             # check if goal set has been reached
-            if goal_check(node, param):
-                return node.x, extract_control_inputs(node)
+            res, ind = goal_check(node, param)
+            if res:
+                u = extract_control_inputs(node)
+                return node.x[:, :ind], u[:, :ind]
 
             # construct child nodes
             for i in node.primitives[-1].successors:
@@ -89,9 +91,9 @@ def goal_check(node, param):
         if param['goal_time_start'] <= i <= param['goal_time_end']:
             p = Point(node.x[0, i], node.x[1, i])
             if param['goal_set'] is None or param['goal_set'].contains(p):
-                return True
+                return True, i
 
-    return False
+    return False, None
 
 def transform_free_space(space, x, time, length):
     """transform the free space from the global to the local coordinate system"""
@@ -118,6 +120,7 @@ def extract_control_inputs(node):
         else:
             u = np.concatenate((u, u_new), axis=1)
 
+    return u
 
 def expand_node(node, primitive, ref_traj):
     """add a new primitive to a node"""
@@ -132,12 +135,13 @@ def expand_node(node, primitive, ref_traj):
     x = np.concatenate((node.x[:, :-1], x_), axis=1)
 
     # compute costs
+    ind = x.shape[1] - primitives[-1].x.shape[1]
     if x.shape[1] <= ref_traj.shape[1]:
-        ind = x.shape[1] - 1
+        index = range(ind, x.shape[1])
     else:
-        ind = ref_traj.shape[1] - 1
+        index = range(ind, ref_traj.shape[1])
 
-    cost = np.sum((ref_traj[:, ind] - x[0:2, ind])**2) + 1000/len(primitives)
+    cost = np.sum((ref_traj[:, index] - x[0:2, index])**2) + 1000/len(primitives)
 
     return Node(primitives, x, cost)
 
