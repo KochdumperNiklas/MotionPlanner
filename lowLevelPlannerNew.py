@@ -24,7 +24,7 @@ def lowLevelPlannerNew(scenario, planning_problem, param, plan, space, vel, spac
     queue = []
 
     for i in ind:
-        queue.append(expand_node(node, MA.primitives[i], ref_traj))
+        queue.append(expand_node(node, MA.primitives[i], i, ref_traj))
 
     # loop until goal set is reached or queue is empty
     while len(queue) > 0:
@@ -34,28 +34,29 @@ def lowLevelPlannerNew(scenario, planning_problem, param, plan, space, vel, spac
 
         # select node with the lowest costs
         node = queue.pop(0)
+        primitive = MA.primitives[node.primitives[-1]]
 
         # check if motion primitive is collision free
-        if collision_check(node, space_all, vel, param):
+        if collision_check(node, primitive, space_all, vel, param):
 
             # check if goal set has been reached
-            res, ind = goal_check(node, param)
+            res, ind = goal_check(node, primitive, param)
             if res:
-                u = extract_control_inputs(node)
+                u = extract_control_inputs(node, MA.primitives)
                 return node.x[:, :ind], u[:, :ind]
 
             # construct child nodes
-            for i in node.primitives[-1].successors:
-                queue.append(expand_node(node, MA.primitives[i], ref_traj))
+            for i in primitive.successors:
+                queue.append(expand_node(node, MA.primitives[i], i, ref_traj))
 
     return None, None
 
 
-def collision_check(node, space, vel, param):
+def collision_check(node, primitive, space, vel, param):
     """check if a motion primitive is collision free"""
 
     # check if the maximum time is exceeded
-    ind = node.x.shape[1] - node.primitives[-1].x.shape[1]
+    ind = node.x.shape[1] - primitive.x.shape[1]
 
     if ind > param['goal_time_end']:
         return False
@@ -72,7 +73,7 @@ def collision_check(node, space, vel, param):
     x = node.x[:, ind]
 
     # loop over all time steps
-    for o in node.primitives[-1].occ:
+    for o in primitive.occ:
         time = int(o['time']/param['time_step'])
         pgon = affine_transform(o['space'], [np.cos(x[3]), -np.sin(x[3]), np.sin(x[3]), np.cos(x[3]), x[0], x[1]])
         if ind + time < len(space) and not space[ind + time].contains(pgon):
@@ -80,11 +81,11 @@ def collision_check(node, space, vel, param):
 
     return True
 
-def goal_check(node, param):
+def goal_check(node, primitive, param):
     """check if the goal set has been reached"""
 
     # get index of the state at before the last primitive
-    ind = node.x.shape[1] - node.primitives[-1].x.shape[1]
+    ind = node.x.shape[1] - primitive.x.shape[1]
 
     # loop over all time steps
     for i in range(ind, node.x.shape[1]):
@@ -95,26 +96,14 @@ def goal_check(node, param):
 
     return False, None
 
-def transform_free_space(space, x, time, length):
-    """transform the free space from the global to the local coordinate system"""
-
-    # extract relevant time steps
-    space_new = deepcopy(space[time:time+length])
-
-    # loop over all time steps
-    for i in range(len(space_new)):
-        pgon = translate(space_new[i], -x[0], -x[1])
-        space_new[i] = affine_transform(pgon, [np.cos(x[3]), np.sin(x[3]), -np.sin(x[3]), np.cos(x[3]), 0, 0])
-
-    return space_new
-
-def extract_control_inputs(node):
+def extract_control_inputs(node, primitives):
     """construct the sequence of control inputs for the given node"""
 
     u = []
 
     for i in range(len(node.primitives)):
-        u_new = np.expand_dims(node.primitives[i].u, axis=1) @ np.ones((1, node.primitives[i].x.shape[1]-1))
+        primitive = primitives[node.primitives[i]]
+        u_new = np.expand_dims(primitive.u, axis=1) @ np.ones((1, primitive.x.shape[1]-1))
         if i == 0:
             u = u_new
         else:
@@ -122,11 +111,11 @@ def extract_control_inputs(node):
 
     return u
 
-def expand_node(node, primitive, ref_traj):
+def expand_node(node, primitive, ind, ref_traj):
     """add a new primitive to a node"""
 
     # add current primitive to the list of primitives
-    primitives = node.primitives + [primitive]
+    primitives = node.primitives + [ind]
 
     # combine trajectories
     phi = node.x[3, -1]
@@ -135,7 +124,7 @@ def expand_node(node, primitive, ref_traj):
     x = np.concatenate((node.x[:, :-1], x_), axis=1)
 
     # compute costs
-    ind = x.shape[1] - primitives[-1].x.shape[1]
+    ind = x.shape[1] - primitive.x.shape[1]
     if x.shape[1] <= ref_traj.shape[1]:
         index = range(ind, x.shape[1])
     else:
