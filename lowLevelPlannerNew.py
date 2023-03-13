@@ -8,6 +8,9 @@ from shapely.affinity import translate
 from shapely.geometry import Point
 import matplotlib.pyplot as plt
 
+# planning horizon for A*-search
+HORIZON = 2
+
 def lowLevelPlannerNew(scenario, planning_problem, param, plan, space, vel, space_all, ref_traj):
     """plan a concrete trajectory for the given high-level plan using a maneuver automaton"""
 
@@ -22,9 +25,11 @@ def lowLevelPlannerNew(scenario, planning_problem, param, plan, space, vel, spac
     ind = MA.velocity2primitives(param['v_init'])
     node = Node([], x, 0)
     queue = []
+    cnt = 0
+    fixed = []
 
     for i in ind:
-        queue.append(expand_node(node, MA.primitives[i], i, ref_traj))
+        queue.append(expand_node(node, MA.primitives[i], i, ref_traj, fixed))
 
     # loop until goal set is reached or queue is empty
     while len(queue) > 0:
@@ -39,6 +44,14 @@ def lowLevelPlannerNew(scenario, planning_problem, param, plan, space, vel, spac
         # check if motion primitive is collision free
         if collision_check(node, primitive, space_all, vel, param):
 
+            # fix motion primitive if planning horizon is reached
+            if len(node.primitives) == cnt + HORIZON:
+                for i in range(len(queue)):
+                    if cnt < len(queue[i].primitives) and queue[i].primitives[cnt] != node.primitives[cnt]:
+                        queue[i].cost = queue[i].cost + 1000
+                fixed.append(node.primitives[cnt])
+                cnt = cnt + 1
+
             # check if goal set has been reached
             res, ind = goal_check(node, primitive, param)
             if res:
@@ -47,7 +60,7 @@ def lowLevelPlannerNew(scenario, planning_problem, param, plan, space, vel, spac
 
             # construct child nodes
             for i in primitive.successors:
-                queue.append(expand_node(node, MA.primitives[i], i, ref_traj))
+                queue.append(expand_node(node, MA.primitives[i], i, ref_traj, fixed))
 
     return None, None
 
@@ -111,7 +124,7 @@ def extract_control_inputs(node, primitives):
 
     return u
 
-def expand_node(node, primitive, ind, ref_traj):
+def expand_node(node, primitive, ind, ref_traj, fixed):
     """add a new primitive to a node"""
 
     # add current primitive to the list of primitives
@@ -130,7 +143,10 @@ def expand_node(node, primitive, ind, ref_traj):
     else:
         index = range(ind, ref_traj.shape[1])
 
-    cost = np.sum((ref_traj[:, index] - x[0:2, index])**2) + 1000/len(primitives)
+    cost = node.cost + np.sum((ref_traj[:, index] - x[0:2, index])**2)
+
+    if len(primitives) <= len(fixed) and primitives[-1] != fixed[len(primitives)-1]:
+        cost = cost + 1000
 
     return Node(primitives, x, cost)
 
