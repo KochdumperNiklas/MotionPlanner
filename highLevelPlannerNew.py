@@ -36,11 +36,14 @@ def highLevelPlannerNew(scenario, planning_problem, param):
     # compute the desired velocity profile over time
     vel_prof = velocity_profile(dist_goal, param)
 
-    # determine all feasible sequence of lanelets to drive on
-    seq = feasible_lanelet_sequences(lanelets, free_space, vel_prof, change_goal, param)
+    # compute the desired reference trajectory
+    ref_traj = velocity2trajectory(vel_prof, param)
+
+    # determine best sequence of lanelets to drive on
+    seq = best_lanelet_sequences(lanelets, free_space, ref_traj, change_goal, param)
 
     # refine the plan: decide on which lanelet to be on for all time steps
-    plan, space = refine_plan(seq, vel_prof, lanelets, param)
+    plan, space = refine_plan(seq, ref_traj, lanelets, param)
 
     # determine drivable space for lane changes
     space_all, time_lane = space_lane_changes(space, plan, lanelets, free_space, param)
@@ -54,7 +57,7 @@ def highLevelPlannerNew(scenario, planning_problem, param):
         vel.append((s.bounds[1], s.bounds[3]))
 
     # compute a desired reference trajectory
-    ref_traj = reference_trajectory(plan, space, vel, time_lane, param, lanelets)
+    ref_traj = reference_trajectory(plan, seq, space, vel, time_lane, param, lanelets)
 
     # transform space from lanelet coordinate system to global coordinate system
     space_xy = lanelet2global(space, plan, lanelets)
@@ -164,8 +167,8 @@ def distance2goal(lanelets, param):
     # catch the case where no goal lane is provided
     if param['goal_lane'] is None:
         default = {}
-        for l in lanelets:
-            default[l.lanelet_id] = 0
+        for l in lanelets.keys():
+            default[l] = 0
         return default, default
 
     # initialize distance to goal lanelet
@@ -191,13 +194,13 @@ def distance2goal(lanelets, param):
 
         if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
             if not lanelet.adj_left in dist.keys():
-                change[s] = change[q] + 1
+                change[lanelet.adj_left] = change[q] + 1
                 dist[lanelet.adj_left] = dist[q]
                 queue.append(lanelet.adj_left)
 
         if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
             if not lanelet.adj_right in dist.keys():
-                change[s] = change[q] + 1
+                change[lanelet.adj_right] = change[q] + 1
                 dist[lanelet.adj_right] = dist[q]
                 queue.append(lanelet.adj_right)
 
@@ -439,18 +442,10 @@ def reduce_space(space, plan, lanelets, param):
 
     return space
 
-def feasible_lanelet_sequences(lanelets, free_space, vel_prof, change_goal, param):
-    """determine all feasible sequences of lanelets to drive on that reach the goal state"""
+def best_lanelet_sequences(lanelets, free_space, ref_traj, change_goal, param):
+    """determine the best sequences of lanelets to drive on that reach the goal state"""
 
     min_cost = None
-
-    # compute reference trajectory
-    ref_traj = []
-    x = param['x0_set']
-
-    for i in range(len(vel_prof)):
-        ref_traj.append((x, vel_prof[i]))
-        x = x + vel_prof[i]*param['time_step']
 
     # create initial node
     v = param['v_init']
@@ -471,6 +466,8 @@ def feasible_lanelet_sequences(lanelets, free_space, vel_prof, change_goal, para
                 if queue[i].cost > min_cost:
                     queue = queue[:i]
                     break
+        if len(queue) == 0:
+            break
 
         # take node from queue
         node = queue.pop()
@@ -692,16 +689,30 @@ def create_branch(space, time_step, free_space, x0, lanelet, param):
 
     return x0_new
 
+def velocity2trajectory(vel_prof, param):
+    """compute the reference trajectory for the given velocity profile"""
 
-def refine_plan(seq, vel_prof, lanelets, param):
+    ref_traj = []
+    x = param['x0_set']
+
+    for i in range(len(vel_prof)):
+        ref_traj.append((x, vel_prof[i]))
+        x = x + vel_prof[i] * param['time_step']
+
+    return ref_traj
+
+def refine_plan(seq, ref_traj, lanelets, param):
     """refine the plan by deciding on which lanelets to be on at which points in time"""
+
+    # determine shift in position when changing to a successor lanelet
+    offset = offsets_lanelet_sequence(seq.lanelets, lanelets)
 
     # select best final set from all intersections with the goal set
     min_cost = np.inf
 
     for fin in seq.x0:
 
-        cost = cost_velocity_set(vel_prof[fin['step']], fin['space'])
+        cost = cost_reference_trajectory(ref_traj, fin, offset[-1])
 
         if cost < min_cost:
             final_set = deepcopy(fin)
@@ -766,7 +777,7 @@ def refine_plan(seq, vel_prof, lanelets, param):
             min_cost = np.inf
 
             for t in transitions:
-                cost = cost_velocity_set(vel_prof[t['step']], t['space'])
+                cost = cost_reference_trajectory(ref_traj, t, offset[i-1])
                 if cost < min_cost:
                     time_step = t['step']
                     space_ = t['space']
@@ -894,7 +905,7 @@ def increase_free_space(space, param):
 
     return space
 
-def reference_trajectory(plan, space, vel, time_lane, param, lanelets):
+def reference_trajectory(plan, seq, space, vel, time_lane, param, lanelets):
     """compute a desired reference trajectory"""
 
     # compute suitable velocity profile
@@ -906,12 +917,24 @@ def reference_trajectory(plan, space, vel, time_lane, param, lanelets):
     for i in range(len(v)-1):
         x.append(x[-1] + v[i] * param['time_step'])
 
-    # determine indices for all lane changes
+    # update plan (= lanelet-time-assignment)
     plan = np.asarray(plan)
+    lanes = seq.lanelets
     ind = np.where(plan[:-1] != plan[1:])[0]
+    dist = 0
+    ind = [-1] + ind.tolist() + [len(plan)-1]
 
-    lanes = [plan[i+1] for i in ind]
-    lanes = [plan[0]] + lanes
+    for i in range(len(lanes)-1):
+        if lanes[i+1] in lanelets[lanes[i]].successor:
+            for j in range(ind[i]+1, ind[i+2]+1):
+                if x[j] - dist < lanelets[lanes[i]].distance[-1]:
+                    plan[j] = lanes[i]
+                else:
+                    plan[j] = lanes[i+1]
+            dist = dist + lanelets[lanes[i]].distance[-1]
+
+    # determine indices for all lane changes
+    ind = np.where(plan[:-1] != plan[1:])[0]
 
     # loop over all lanelets the car drives on
     dist = 0
@@ -928,7 +951,7 @@ def reference_trajectory(plan, space, vel, time_lane, param, lanelets):
             lanelet = lanelets[lanes[j]]
 
             if d > lanelet.distance[-1]:
-                if j < len(lanes)-1 and lanes[j+1] in lanelet.successor:
+                if j < len(lanes) - 1 and lanes[j + 1] in lanelet.successor:
                     dist = dist + lanelet.distance[-1]
                     step = i
                     break
@@ -947,7 +970,10 @@ def reference_trajectory(plan, space, vel, time_lane, param, lanelets):
 
     for i in range(0, len(plan)):
         if len(center_traj[cnt][i]) == 0:
-            ref_traj[:, i] = center_traj[cnt+1][i]
+            try:
+                ref_traj[:, i] = center_traj[cnt+1][i]
+            except:
+                test = 1
         else:
             ref_traj[:, i] = center_traj[cnt][i]
         if i < len(plan)-1 and plan[i] != plan[i+1]:
@@ -1038,11 +1064,28 @@ def linear_interpolation(x_start, x_end, length):
 
     return [x_start + d * i for i in range(length)]
 
-def cost_velocity_set(val, set):
-    """compute the cost of a set of velocity values with respect to a desired value"""
+def cost_reference_trajectory(ref_traj, area, offset):
+    """compute cost based on the distance between the reachable set and the desired reference trajectory"""
 
-    return max(set.bounds[1] - val, val - set.bounds[3])
+    p = Point(ref_traj[area['step']][0] - offset, ref_traj[area['step']][1])
 
+    if area['space'].contains(p):
+        return 0
+    else:
+        return area['space'].exterior.distance(p)
+
+def offsets_lanelet_sequence(seq, lanelets):
+    """determine shift in position when changing to a successor lanelet for the given lanelet sequence"""
+
+    offset = [0]
+
+    for i in range(len(seq) - 1):
+        if seq[i + 1] in lanelets[seq[i]].successor:
+            offset.append(offset[i] + lanelets[seq[i]].distance[-1])
+        else:
+            offset.append(offset[i])
+
+    return offset
 
 def lanelet2global(space, plan, lanelets):
     """transform free space from lanelet coordinate system to global coordinate system"""
@@ -1204,13 +1247,7 @@ class Node:
         """compute cost function value for the node"""
 
         # determine shift in position when changing to a successor lanelet
-        offset = [0]
-
-        for i in range(len(self.lanelets)-1):
-            if self.lanelets[i+1] in lanelets[self.lanelets[i]].successor:
-                offset.append(offset[i] + lanelets[self.lanelets[i]].distance[-1])
-            else:
-                offset.append(offset[i])
+        offset = offsets_lanelet_sequence(self.lanelets, lanelets)
 
         # determine cost from deviation to the desired reference trajectory
         diff = np.inf * np.ones(len(ref_traj))
@@ -1231,7 +1268,7 @@ class Node:
 
                     # compute distance from desired velocity profile
                     if set['step'] == i:
-                        if set['space'].contains(p) or (j == len(self.drive_area)-1 and self.x0[0]['step'] <= i):
+                        if set['space'].contains(p):
                             diff_cur = 0
                         else:
                             diff_cur = set['space'].exterior.distance(p)
