@@ -5,8 +5,8 @@ from ManeuverAutomaton import MotionPrimitive
 from ManeuverAutomaton import ManeuverAutomaton
 
 # control inputs
-accelerations = [-1.2, -0.8, -0.4, 0, 0.4, 0.8, 1.2]
-steer = [-0.4, -0.3, -0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2, 0.3, 0.4]
+accelerations = [-8, -4, -2, -1.2, -0.8, -0.4, 0, 0.4, 0.8, 1.2, 2, 4, 8]
+steer = [-0.5, -0.4, -0.3, -0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5]
 
 # velocity range
 v_start = 0
