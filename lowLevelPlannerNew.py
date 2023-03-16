@@ -6,6 +6,7 @@ from copy import deepcopy
 from shapely.affinity import affine_transform
 from shapely.affinity import translate
 from shapely.geometry import Point
+from shapely.geometry import Polygon
 import matplotlib.pyplot as plt
 
 # planning horizon for A*-search
@@ -88,9 +89,10 @@ def collision_check(node, primitive, space, vel, param):
     # loop over all time steps
     for o in primitive.occ:
         time = int(o['time']/param['time_step'])
-        pgon = affine_transform(o['space'], [np.cos(x[3]), -np.sin(x[3]), np.sin(x[3]), np.cos(x[3]), x[0], x[1]])
-        if ind + time < len(space) and not space[ind + time].contains(pgon):
-            return False
+        if ind + time <= param['steps']:
+            pgon = affine_transform(o['space'], [np.cos(x[3]), -np.sin(x[3]), np.sin(x[3]), np.cos(x[3]), x[0], x[1]])
+            if ind + time < len(space) and not containment_check_robust(space[ind + time], pgon):
+                return False
 
     return True
 
@@ -104,10 +106,15 @@ def goal_check(node, primitive, param):
     for i in range(ind, node.x.shape[1]):
         if param['goal_time_start'] <= i <= param['goal_time_end']:
             p = Point(node.x[0, i], node.x[1, i])
-            if param['goal_set'] is None or param['goal_set'].contains(p):
+            if param['goal_space'] is None or param['goal_space'].contains(p):
                 return True, i
 
     return False, None
+
+def containment_check_robust(pgon1, pgon2):
+    """check if polygon 1 contains polygon 2"""
+
+    return pgon1.contains(pgon2) or not pgon1.exterior.intersects(pgon2)
 
 def extract_control_inputs(node, primitives):
     """construct the sequence of control inputs for the given node"""
@@ -123,6 +130,32 @@ def extract_control_inputs(node, primitives):
             u = np.concatenate((u, u_new), axis=1)
 
     return u
+
+def plot_trajectory(node, lanelets, plan, param):
+    """plot the trajectory for the given node"""
+
+    # plot lanelets
+    for l in lanelets:
+        if l.lanelet_id in plan:
+            plt.plot(*l.polygon.shapely_object.exterior.xy, 'b')
+
+    # plot goal set
+    if param['goal_space'] is not None:
+        plt.plot(*param['goal_space'].exterior.xy, 'g')
+
+    # shape of the car
+    L = param['length']
+    W = param['width']
+    car = Polygon([(-L / 2, -W / 2), (-L / 2, W / 2), (L / 2, W / 2), (L / 2, -W / 2)])
+
+    # plot car
+    for i in range(node.x.shape[1]):
+        phi = node.x[3, i]
+        tmp = affine_transform(car, [np.cos(phi), -np.sin(phi), np.sin(phi), np.cos(phi), node.x[0, i], node.x[1, i]])
+        plt.plot(*tmp.exterior.xy, 'r')
+
+    plt.axis('equal')
+    plt.show()
 
 def expand_node(node, primitive, ind, ref_traj, fixed):
     """add a new primitive to a node"""

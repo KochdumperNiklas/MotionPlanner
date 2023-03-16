@@ -9,7 +9,7 @@ from copy import deepcopy
 from commonroad.scenario.obstacle import StaticObstacle
 
 # weighting factors for the cost function
-W_LANE_CHANGE = 1
+W_LANE_CHANGE = 1000
 W_DIST = 1
 
 # safety distance to other cars
@@ -40,7 +40,7 @@ def highLevelPlannerNew(scenario, planning_problem, param):
     ref_traj = velocity2trajectory(vel_prof, param)
 
     # determine best sequence of lanelets to drive on
-    seq = best_lanelet_sequences(lanelets, free_space, ref_traj, change_goal, param)
+    seq = best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, param)
 
     # refine the plan: decide on which lanelet to be on for all time steps
     plan, space = refine_plan(seq, ref_traj, lanelets, param)
@@ -106,6 +106,7 @@ def initialization(scenario, planning_problem, param):
     if hasattr(planning_problem.goal.state_list[0], 'position'):
 
         set = get_shapely_object(planning_problem.goal.state_list[0].position)
+        param['goal_space'] = set
 
         if planning_problem.goal.lanelets_of_goal_position is None:
             for id in lanelets.keys():
@@ -120,11 +121,13 @@ def initialization(scenario, planning_problem, param):
 
         if planning_problem.goal.lanelets_of_goal_position is None:
             param['goal_lane'] = None
+            param['goal_space'] = None
             goal_space_start = -100000
             goal_space_end = 100000
         else:
             param['goal_lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[0][0]
             l = lanelets[param['goal_lane']]
+            param['goal_space'] = l.polygon.shapely_object
             goal_space_start, goal_space_end = projection_lanelet_centerline(l, l.polygon.shapely_object)
 
     if hasattr(planning_problem.goal.state_list[0], 'velocity'):
@@ -203,6 +206,12 @@ def distance2goal(lanelets, param):
                 change[lanelet.adj_right] = change[q] + 1
                 dist[lanelet.adj_right] = dist[q]
                 queue.append(lanelet.adj_right)
+
+    # add costs for lanelet from which it is impossible to reach the goal set
+    for l in lanelets.keys():
+        if l not in dist.keys():
+            dist[l] = np.inf
+            change[l] = np.inf
 
     return dist, change
 
@@ -404,16 +413,22 @@ def projection_lanelet_centerline(lanelet, pgon):
     # loop over all centerline segments
     for i in range(0, len(lanelet.distance) - 1):
 
-        # compute normalized vector representing the direction of the current segment
-        diff = lanelet.center_vertices[i + 1, :] - lanelet.center_vertices[i, :]
-        diff = np.expand_dims(diff / np.linalg.norm(diff), axis=0)
+        # check if space intersects the current lanelet segment
+        seg = Polygon(np.concatenate((lanelet.right_vertices[[i], :], lanelet.right_vertices[[i+1], :],
+                                      lanelet.left_vertices[[i+1], :], lanelet.left_vertices[[i], :])))
 
-        # project the vertices of the polygon onto the centerline
-        V_ = diff @ (V - np.transpose(lanelet.center_vertices[[i], :]))
+        if seg.intersects(o_int):
 
-        # update ranges for the projection
-        dist_max = max(dist_max, max(V_[0]) + lanelet.distance[i])
-        dist_min = min(dist_min, min(V_[0]) + lanelet.distance[i])
+            # compute normalized vector representing the direction of the current segment
+            diff = lanelet.center_vertices[i + 1, :] - lanelet.center_vertices[i, :]
+            diff = np.expand_dims(diff / np.linalg.norm(diff), axis=0)
+
+            # project the vertices of the polygon onto the centerline
+            V_ = diff @ (V - np.transpose(lanelet.center_vertices[[i], :]))
+
+            # update ranges for the projection
+            dist_max = max(dist_max, max(V_[0]) + lanelet.distance[i])
+            dist_min = min(dist_min, min(V_[0]) + lanelet.distance[i])
 
     return dist_min, dist_max
 
@@ -442,7 +457,7 @@ def reduce_space(space, plan, lanelets, param):
 
     return space
 
-def best_lanelet_sequences(lanelets, free_space, ref_traj, change_goal, param):
+def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, param):
     """determine the best sequences of lanelets to drive on that reach the goal state"""
 
     min_cost = None
@@ -761,7 +776,7 @@ def refine_plan(seq, ref_traj, lanelets, param):
             # check if it is possible to change lanelets in this time step
             if i > 0 and seq.drive_area[i-1][cnt]['step'] == j:
                 if is_successor:
-                    if space_prev.bounds[0] <= 0:
+                    if space_prev.bounds[0] <= -0.1:
                         space_ = translate(space_prev, dist, 0)
                         space_ = space_.intersection(seq.drive_area[i - 1][cnt]['space'])
                         transitions.append({'space': space_, 'step': j})
@@ -803,6 +818,40 @@ def space_lane_changes(space, plan, lanelets, free_space, param):
 
     # get drivable area (without space for lane changes) in the global coordinate frame
     space_glob = lanelet2global(space, plan, lanelets)
+
+    # add space from left and right lanelet for the beginning since the initial position is not necessarily in lanelet
+    for i in range(10):
+
+        for f in free_space[plan[i]][i]:
+            if f.intersects(space[i]):
+                pgon = lanelet2global([f], [plan[i]], lanelets)
+                space_glob[i] = union_robust(space_glob[i], pgon[0])
+
+        if not lanelets[plan[i]].adj_right is None and lanelets[plan[i]].adj_right_same_direction:
+            for f in free_space[lanelets[plan[i]].adj_right][i]:
+                if f.intersects(space[i]):
+                    pgon = lanelet2global([f], [lanelets[plan[i]].adj_right], lanelets)
+                    space_glob[i] = union_robust(space_glob[i], pgon[0])
+
+        if not lanelets[plan[i]].adj_left is None and lanelets[plan[i]].adj_left_same_direction:
+            for f in free_space[lanelets[plan[i]].adj_left][i]:
+                if f.intersects(space[i]):
+                    pgon = lanelet2global([f], [lanelets[plan[i]].adj_left], lanelets)
+                    space_glob[i] = union_robust(space_glob[i], pgon[0])
+
+        for suc in lanelets[plan[i]].successor:
+            for f in free_space[suc][i]:
+                pgon = translate(f, lanelets[plan[i]].distance[-1], 0)
+                if pgon.intersects(space[i]):
+                    pgon = lanelet2global([f], [suc], lanelets)
+                    space_glob[i] = union_robust(space_glob[i], pgon[0])
+
+        for suc in lanelets[plan[i]].predecessor:
+            for f in free_space[suc][i]:
+                pgon = translate(f, -lanelets[suc].distance[-1], 0)
+                if pgon.intersects(space[i]):
+                    pgon = lanelet2global([f], [suc], lanelets)
+                    space_glob[i] = union_robust(space_glob[i], pgon[0])
 
     # loop over all lane changes
     for i in range(len(ind)):
@@ -899,8 +948,8 @@ def increase_free_space(space, param):
     else:
 
         for k in range(len(space)):
-            pgon1 = translate(space[k], param['length_max'], 0)
-            pgon2 = translate(space[k], -param['length_max'], 0)
+            pgon1 = translate(space[k], 0.5*param['length_max'], 0)
+            pgon2 = translate(space[k], -0.5*param['length_max'], 0)
             space[k] = pgon1.union(pgon2).convex_hull
 
     return space
@@ -920,11 +969,11 @@ def reference_trajectory(plan, seq, space, vel, time_lane, param, lanelets):
     # update plan (= lanelet-time-assignment)
     plan = np.asarray(plan)
     lanes = seq.lanelets
-    ind = np.where(plan[:-1] != plan[1:])[0]
     dist = 0
-    ind = [-1] + ind.tolist() + [len(plan)-1]
 
     for i in range(len(lanes)-1):
+        ind = np.where(plan[:-1] != plan[1:])[0]
+        ind = [-1] + ind.tolist() + [len(plan) - 1]
         if lanes[i+1] in lanelets[lanes[i]].successor:
             for j in range(ind[i]+1, ind[i+2]+1):
                 if x[j] - dist < lanelets[lanes[i]].distance[-1]:
@@ -970,10 +1019,7 @@ def reference_trajectory(plan, seq, space, vel, time_lane, param, lanelets):
 
     for i in range(0, len(plan)):
         if len(center_traj[cnt][i]) == 0:
-            try:
-                ref_traj[:, i] = center_traj[cnt+1][i]
-            except:
-                test = 1
+            ref_traj[:, i] = center_traj[cnt+1][i]
         else:
             ref_traj[:, i] = center_traj[cnt][i]
         if i < len(plan)-1 and plan[i] != plan[i+1]:
@@ -987,16 +1033,13 @@ def reference_trajectory(plan, seq, space, vel, time_lane, param, lanelets):
 
             # compute start and end time step for the lane change
             ind_start = max(time_lane[i][0]+1, ind[i] - np.floor(DES_LANE_CHANGE/2)).astype(int)
-            ind_end = max(time_lane[i][-1]-1, ind[i] + np.floor(DES_LANE_CHANGE/2)).astype(int)
+            ind_end = min(time_lane[i][-1]-1, ind[i] + np.floor(DES_LANE_CHANGE/2)).astype(int)
 
             # interpolate between the center trajectories for the two lanes
             for j in range(ind_start, ind_end+1):
 
                 w = 1/(1 + np.exp(-5*(2*((j - ind_start)/(ind_end - ind_start))-1)))
-                try:
-                    p = (1-w) * center_traj[i][j] + w * center_traj[i+1][j]
-                except:
-                    test = 1
+                p = (1-w) * center_traj[i][j] + w * center_traj[i+1][j]
                 ref_traj[:, j] = p
 
     return ref_traj
@@ -1121,8 +1164,6 @@ def lanelet2global(space, plan, lanelets):
         # loop over the single segments of the lanelet
         for j in range(0, len(lanelet.distance)-1):
 
-            intermediate_point = True
-
             if lower >= lanelet.distance[j] and lower <= lanelet.distance[j+1]:
 
                 d = lanelet.left_vertices[j + 1] - lanelet.left_vertices[j]
@@ -1133,7 +1174,13 @@ def lanelet2global(space, plan, lanelets):
                 p_right = lanelet.right_vertices[j] + d / np.linalg.norm(d) * (lower - lanelet.distance[j])
                 right_vertices.append(Point(p_right[0], p_right[1]))
 
-                intermediate_point = False
+            if lower <= lanelet.distance[j] <= lanelet.distance[j+1]:
+
+                p_left = lanelet.left_vertices[j]
+                left_vertices.append(Point(p_left[0], p_left[1]))
+
+                p_right = lanelet.right_vertices[j]
+                right_vertices.append(Point(p_right[0], p_right[1]))
 
             if upper >= lanelet.distance[j] and upper <= lanelet.distance[j+1]:
 
@@ -1146,14 +1193,6 @@ def lanelet2global(space, plan, lanelets):
                 right_vertices.append(Point(p_right[0], p_right[1]))
 
                 break
-
-            if len(left_vertices) > 0 and intermediate_point:
-
-                p_left = lanelet.left_vertices[j]
-                left_vertices.append(Point(p_left[0], p_left[1]))
-
-                p_right = lanelet.right_vertices[j]
-                right_vertices.append(Point(p_right[0], p_right[1]))
 
         # construct the resulting polygon in the global coordinate system
         right_vertices.reverse()
