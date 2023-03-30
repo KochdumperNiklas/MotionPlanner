@@ -1007,7 +1007,7 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, param, lanelets)
                     break
 
             for k in range(1, len(lanelet.distance)):
-                if d <= lanelet.distance[k]:
+                if d <= lanelet.distance[k] + 1e-10:
                     p1 = lanelet.center_vertices[k-1, :]
                     p2 = lanelet.center_vertices[k, :]
                     p = p1 + (p2 - p1) * (d - lanelet.distance[k-1])/(lanelet.distance[k] - lanelet.distance[k-1])
@@ -1086,7 +1086,9 @@ def trajectory_position_velocity(space, plan, vel_prof, lanelets, param):
             elif space[i+1].exterior.distance(Point(p2[0], p2[1])) < 1e-10:
                 p = Point(p2[0], p2[1])
             else:
-                raise Exception("Space not driveable!")
+                p = nearest_points(space[i + 1], LineString([p1, p2]))[0]
+                if space[i+1].exterior.distance(p) > 1e-10:
+                    raise Exception("Space not driveable!")
 
             x[i+1] = p.x
             v[i+1] = p.y
