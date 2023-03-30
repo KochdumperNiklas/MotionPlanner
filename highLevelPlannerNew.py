@@ -3,8 +3,10 @@ import matplotlib.pyplot as plt
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from shapely.geometry import MultiPolygon
+from shapely.geometry import LineString
 from shapely.affinity import affine_transform
 from shapely.affinity import translate
+from shapely.ops import nearest_points
 from copy import deepcopy
 from commonroad.scenario.obstacle import StaticObstacle
 
@@ -57,10 +59,11 @@ def highLevelPlannerNew(scenario, planning_problem, param):
         vel.append((s.bounds[1], s.bounds[3]))
 
     # compute a desired reference trajectory
-    ref_traj = reference_trajectory(plan, seq, space, vel, time_lane, param, lanelets)
+    ref_traj, plan = reference_trajectory(plan, seq, space, vel_prof, time_lane, param, lanelets)
 
     # transform space from lanelet coordinate system to global coordinate system
-    space_xy = lanelet2global(space, plan, lanelets)
+    #space_xy = lanelet2global(space, plan, lanelets)
+    space_xy = []
 
     return plan, space_xy, vel, space_all, ref_traj
 
@@ -964,17 +967,11 @@ def increase_free_space(space, param):
 
     return space
 
-def reference_trajectory(plan, seq, space, vel, time_lane, param, lanelets):
+def reference_trajectory(plan, seq, space, vel_prof, time_lane, param, lanelets):
     """compute a desired reference trajectory"""
 
     # compute suitable velocity profile
-    v = desired_velocity(vel)
-
-    # compute corresponding position profile
-    x = [space[0].bounds[0]]
-
-    for i in range(len(v)-1):
-        x.append(x[-1] + v[i] * param['time_step'])
+    x, v = trajectory_position_velocity(space, plan, vel_prof, lanelets, param)
 
     # update plan (= lanelet-time-assignment)
     plan = np.asarray(plan)
@@ -1009,7 +1006,7 @@ def reference_trajectory(plan, seq, space, vel, time_lane, param, lanelets):
             d = x[i] - dist
             lanelet = lanelets[lanes[j]]
 
-            if d > lanelet.distance[-1]:
+            if d >= lanelet.distance[-1]:
                 if j < len(lanes) - 1 and lanes[j + 1] in lanelet.successor:
                     dist = dist + lanelet.distance[-1]
                     step = i
@@ -1024,7 +1021,7 @@ def reference_trajectory(plan, seq, space, vel, time_lane, param, lanelets):
                     break
 
     # store reference trajectory (without considering lane changes)
-    ref_traj = np.zeros((2, len(x)))
+    ref_traj = np.zeros((2, len(plan)))
     cnt = 0
 
     for i in range(0, len(plan)):
@@ -1052,7 +1049,55 @@ def reference_trajectory(plan, seq, space, vel, time_lane, param, lanelets):
                 p = (1-w) * center_traj[i][j] + w * center_traj[i+1][j]
                 ref_traj[:, j] = p
 
-    return ref_traj
+    return ref_traj, plan
+
+def trajectory_position_velocity(space, plan, vel_prof, lanelets, param):
+    """compute the desired space-velocity trajectory"""
+
+    # initialization
+    dt = param['time_step']
+    a_max = param['a_max']
+
+    v = np.asarray(vel_prof)
+    x = np.zeros(v.shape)
+    x[0] = param['x0_set']
+
+    dist = 0
+
+    # loop over all time steps
+    for i in range(len(plan)-1):
+
+        # shift space if moving on to a successor lanelet
+        if plan[i+1] != plan[i] and plan[i+1] in lanelets[plan[i]].successor:
+            dist = dist + lanelets[plan[i]].distance[-1]
+
+        space[i+1] = translate(space[i+1], dist, 0)
+
+        # compute the next position when driving with the desired velocity
+        a = (v[i+1] - v[i])/dt
+        x[i+1] = x[i] + v[i]*dt + 0.5 * a * dt**2
+
+        # check if driving the desired velocity profile is feasible
+        if not space[i+1].contains(Point(x[i+1], v[i+1])):
+
+            # determine the best feasible acceleration
+            p1 = (x[i] + v[i]*dt + 0.5 * a_max * dt**2, v[i] + a_max * dt)
+            p2 = (x[i] + v[i]*dt - 0.5 * a_max * dt**2, v[i] - a_max * dt)
+            pgon = space[i+1].intersection(LineString([p1, p2]))
+
+            if not pgon.is_empty:
+                p = nearest_points(pgon, Point(x[i+1], v[i+1]))[0]
+            elif space[i+1].exterior.distance(Point(p1[0], p1[1])) < 1e-10:
+                p = Point(p1[0], p1[1])
+            elif space[i+1].exterior.distance(Point(p2[0], p2[1])) < 1e-10:
+                p = Point(p2[0], p2[1])
+            else:
+                raise Exception("Space not driveable!")
+
+            x[i+1] = p.x
+            v[i+1] = p.y
+
+    return x, v
 
 
 def desired_velocity(vel):
