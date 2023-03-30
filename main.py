@@ -24,20 +24,23 @@ param['s_max'] = np.deg2rad(24.0)       # maximum steering angle
 # select the CommonRoad scenario that should be solved
 file = "ZAM_Zip-1_19_T-1.xml"
 file = "ZAM_Tutorial-1_1_T-1.xml"
-file = "USA_US101-6_2_T-1.xml"
+#file = "USA_US101-6_2_T-1.xml"
 #file = "USA_US101-7_1_T-1.xml"
 #file = "ZAM_HW-1_1_S-1.xml"
-#file = "FRA_Sete-1_1_T-1.xml"
+file = "FRA_Sete-1_1_T-1.xml"
 file = "BEL_Putte-4_2_T-1.xml"
+#file = "RUS_Bicycle-3_1_T-1.xml"
+file = "ESP_Monzon-2_1_T-1.xml"
+file = "BEL_Zwevegem-2_3_T-1.xml"
 
 # load the CommonRoad scenario
 scenario, planning_problem = CommonRoadFileReader(os.path.join('scenarios', file)).open()
 
 # high-level planner: decides on which lanelets to be at which points in time
-plan, space, vel, space_all, ref_traj = highLevelPlannerNew(scenario, planning_problem, param)
+plan, vel, space, ref_traj = highLevelPlannerNew(scenario, planning_problem, param)
 
 # low-level planner: plans a concrete trajectory for the high-level plan
-x, u = lowLevelPlannerOptimization(scenario, planning_problem, param, plan, space, vel, space_all, ref_traj)
+x, u = lowLevelPlannerNew(scenario, planning_problem, param, plan, vel, space, ref_traj)
 
 # visualization
 plt.figure(figsize=(25, 10))

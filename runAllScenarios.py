@@ -11,7 +11,7 @@ from os.path import isfile, join
 
 from highLevelPlannerNew import highLevelPlannerNew
 from highLevelPlanner import highLevelPlanner
-from lowLevelPlanner import lowLevelPlanner
+from lowLevelPlannerNew import lowLevelPlannerNew
 
 # parameter for the car
 param = {}
@@ -33,8 +33,8 @@ for f in files:
 
     # run the motion planner
     try:
-        plan, space, vel = highLevelPlannerNew(scenario, planning_problem, param)
-        x, u = lowLevelPlanner(scenario, planning_problem, param, plan, space, vel)
+        plan, vel, space, ref_traj = highLevelPlannerNew(scenario, planning_problem, param)
+        x, u = lowLevelPlannerNew(scenario, planning_problem, param, plan, vel, space, ref_traj)
         print(f + ': success')
     except:
         print(f + ': failed')

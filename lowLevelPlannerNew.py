@@ -1,7 +1,7 @@
 from ManeuverAutomaton import ManeuverAutomaton
 import numpy as np
 import pickle
-import scipy
+import scipy.linalg
 from copy import deepcopy
 from shapely.affinity import affine_transform
 from shapely.affinity import translate
@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 # planning horizon for A*-search
 HORIZON = 2
 
-def lowLevelPlannerNew(scenario, planning_problem, param, plan, space, vel, space_all, ref_traj):
+def lowLevelPlannerNew(scenario, planning_problem, param, plan, vel, space_all, ref_traj):
     """plan a concrete trajectory for the given high-level plan using a maneuver automaton"""
 
     # load the maneuver automaton
@@ -44,6 +44,11 @@ def lowLevelPlannerNew(scenario, planning_problem, param, plan, space, vel, spac
 
         # check if motion primitive is collision free
         if collision_check(node, primitive, space_all, vel, param):
+
+            #print(node.primitives)
+
+            """if len(node.primitives) >= 3:
+                plot_trajectory(node, scenario, plan, ref_traj, param)"""
 
             # fix motion primitive if planning horizon is reached
             if len(node.primitives) == cnt + HORIZON:
@@ -92,6 +97,9 @@ def collision_check(node, primitive, space, vel, param):
         if ind + time <= param['steps']:
             pgon = affine_transform(o['space'], [np.cos(x[3]), -np.sin(x[3]), np.sin(x[3]), np.cos(x[3]), x[0], x[1]])
             if ind + time < len(space) and not containment_check_robust(space[ind + time], pgon):
+                """plt.plot(*space[ind + time].exterior.xy)
+                plt.plot(*pgon.exterior.xy)
+                plt.show()"""
                 return False
 
     return True
@@ -131,10 +139,12 @@ def extract_control_inputs(node, primitives):
 
     return u
 
-def plot_trajectory(node, lanelets, plan, param):
+def plot_trajectory(node, scenario, plan, ref_traj, param):
     """plot the trajectory for the given node"""
 
     # plot lanelets
+    lanelets = scenario.lanelet_network.lanelets
+
     for l in lanelets:
         if l.lanelet_id in plan:
             plt.plot(*l.polygon.shapely_object.exterior.xy, 'b')
@@ -142,6 +152,9 @@ def plot_trajectory(node, lanelets, plan, param):
     # plot goal set
     if param['goal_space'] is not None:
         plt.plot(*param['goal_space'].exterior.xy, 'g')
+
+    # plot reference trajectory
+    plt.plot(ref_traj[0, :], ref_traj[1, :], 'k')
 
     # shape of the car
     L = param['length']

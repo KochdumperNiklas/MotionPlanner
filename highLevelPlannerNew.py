@@ -54,18 +54,12 @@ def highLevelPlannerNew(scenario, planning_problem, param):
     space = reduce_space(space, plan, lanelets, param)
 
     # extract the safe velocity intervals at each time point
-    vel = []
-    for s in space:
-        vel.append((s.bounds[1], s.bounds[3]))
+    vel = [(s.bounds[1], s.bounds[3]) for s in space]
 
     # compute a desired reference trajectory
     ref_traj, plan = reference_trajectory(plan, seq, space, vel_prof, time_lane, param, lanelets)
 
-    # transform space from lanelet coordinate system to global coordinate system
-    #space_xy = lanelet2global(space, plan, lanelets)
-    space_xy = []
-
-    return plan, space_xy, vel, space_all, ref_traj
+    return plan, vel, space_all, ref_traj
 
 
 def initialization(scenario, planning_problem, param):
@@ -1098,69 +1092,6 @@ def trajectory_position_velocity(space, plan, vel_prof, lanelets, param):
             v[i+1] = p.y
 
     return x, v
-
-
-def desired_velocity(vel):
-    """compute a desired velocity for each time step"""
-
-    # select initial and final velocity
-    v_init = vel[0][0]
-
-    if vel[-1][0] <= v_init <= vel[-1][1]:
-        v_end = v_init
-    elif v_init < vel[-1][0]:
-        v_end = vel[-1][0]
-    else:
-        v_end = vel[-1][1]
-
-    v = linear_interpolation(v_init, v_end, len(vel))
-
-    # loop until desired velocity profile if contained in valid velocity set
-    v = velocity_recursive(v, vel)
-
-    return v
-
-def velocity_recursive(v, vel):
-    """recursive function to refine the velocity profile"""
-
-    # loop over all time steps
-    dmax = 0
-    ind = None
-
-    for i in range(len(v)):
-
-        if vel[i][0] > v[i]:
-            d = vel[i][0] - v[i]
-            if d > dmax:
-                ind = i
-                dmax = d
-                vd = vel[i][0]
-        elif vel[i][1] < v[i]:
-            d = v[i] - vel[i][1]
-            if d > dmax:
-                ind = i
-                dmax = d
-                vd = vel[i][1]
-
-    # recursively refine the velocity profile
-    if ind is not None:
-        v1 = linear_interpolation(v[0], vd, ind + 1)
-        v1 = velocity_recursive(v1, vel[:ind+1])
-
-        v2 = linear_interpolation(vd, v[-1], len(v) - ind)
-        v2 = velocity_recursive(v2, vel[ind:])
-
-        v = v1[:-1] + v2
-
-    return v
-
-
-def linear_interpolation(x_start, x_end, length):
-    """linear interpolation between x_start and x_end"""
-
-    d = (x_end - x_start)/(length-1)
-
-    return [x_start + d * i for i in range(length)]
 
 def cost_reference_trajectory(ref_traj, area, offset):
     """compute cost based on the distance between the reachable set and the desired reference trajectory"""

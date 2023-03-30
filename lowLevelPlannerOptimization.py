@@ -11,7 +11,7 @@ RD = np.diag([1, 1000.0])             # input difference cost matrix, penalty fo
 
 DELTA_PHI = np.pi/20                  # orientation deviation from the reference trajectory
 
-def lowLevelPlannerOptimization(scenario, planning_problem, param, plan, space, vel, space_all, ref_traj):
+def lowLevelPlannerOptimization(scenario, planning_problem, param, plan, vel, space_all, ref_traj):
     """plan a concrete trajectory for the given high-level plan via optimization"""
 
     # compute orientation of the car along the reference trajectory
