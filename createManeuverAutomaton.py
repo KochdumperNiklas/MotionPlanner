@@ -4,9 +4,17 @@ from scipy.integrate import solve_ivp
 from ManeuverAutomaton import MotionPrimitive
 from ManeuverAutomaton import ManeuverAutomaton
 
-# control inputs
+# acceleration
 accelerations = [-8, -4, -2, -1.2, -0.8, -0.4, 0, 0.4, 0.8, 1.2, 2, 4, 8]
-steer = [-0.5, -0.4, -0.3, -0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5]
+
+# desired final orientation
+orientation = [-1, -0.8, -0.6, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1]
+
+# maximum steering angle
+s_max = 1
+
+# wheelbase of the car
+WB = 2.3
 
 # velocity range
 v_start = 0
@@ -28,17 +36,27 @@ while v_init < v_end:
         # check if the motion primitive can be connected to other motion primitives
         if v_start <= v_init + acc*tFinal <= v_end:
 
-            # loop over all steering angles
-            for st in steer:
+            # loop over all final orientations
+            for o in orientation:
 
-                # simulate the system
-                ode = lambda t, x, u1, u2: [x[2] * np.cos(x[3]), x[2] * np.sin(x[3]), u1, u2]
-                sol = solve_ivp(ode, [0, tFinal], [0, 0, v_init, 0], args=(acc, st), dense_output=True)
-                t = np.linspace(0, tFinal, 11)
-                x = sol.sol(t)
+                if abs(v_init * tFinal + 0.5*acc * tFinal**2) > 0:
 
-                # construct the motion primitive
-                primitives.append(MotionPrimitive(x, np.array([acc, st]), tFinal))
+                    # compute the required steering angle to achieve the desired final orientation
+                    steer = np.arctan(WB * o / (v_init * tFinal + 0.5*acc * tFinal**2))
+
+                    if abs(steer) < s_max:
+
+                        # simulate the system
+                        ode = lambda t, x, u1, u2: [x[2] * np.cos(x[3]) + WB/2 * np.sin(x[3]) * x[2] * np.tan(u2) / WB,
+                                                    x[2] * np.sin(x[3]) + WB/2 * np.cos(x[3]) * x[2] * np.tan(u2) / WB,
+                                                    u1,
+                                                    x[2] * np.tan(u2) / WB]
+                        sol = solve_ivp(ode, [0, tFinal], [0, 0, v_init, 0], args=(acc, steer), dense_output=True)
+                        t = np.linspace(0, tFinal, 11)
+                        x = sol.sol(t)
+
+                        # construct the motion primitive
+                        primitives.append(MotionPrimitive(x, np.array([acc, steer]), tFinal))
 
     v_init = v_init + v_diff
 
