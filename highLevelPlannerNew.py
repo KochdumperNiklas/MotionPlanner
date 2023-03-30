@@ -526,8 +526,7 @@ def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, param):
                 queue.append(expand_node(node, entry, drive_area, 'left', ref_traj, change_goal, lanelets))
 
         for entry in suc:
-            if len(entry) > MIN_LANE_CHANGE:
-                queue.append(expand_node(node, entry, drive_area, 'none', ref_traj, change_goal, lanelets))
+            queue.append(expand_node(node, entry, drive_area, 'none', ref_traj, change_goal, lanelets))
 
     return final_node
 
@@ -577,12 +576,14 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, param):
                 tmp.append(sp.intersection(space))
 
         # check if driveable area intersects multiple free space segments (can happen if another car comes into lane)
+        finished = False
+
         if len(tmp) > 1:
             space = tmp[0]
             for k in range(1, len(tmp)):
                 x0_new.append(create_branch(tmp[k], i+1, free_space, x0[cnt:], lanelet.lanelet_id, param))
         elif len(tmp) == 0:
-            break
+            finished = True
         else:
             space = tmp[0]
 
@@ -598,6 +599,9 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, param):
                     successor_possible_ = True
 
         successor_possible = successor_possible_
+
+        if finished:
+            break
 
         # check if it is possible to make a lane change to the left
         if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
@@ -791,12 +795,18 @@ def refine_plan(seq, ref_traj, lanelets, param):
 
             min_cost = np.inf
 
-            for t in transitions:
-                cost = cost_reference_trajectory(ref_traj, t, offset[i-1])
-                if cost < min_cost:
-                    time_step = t['step']
-                    space_ = t['space']
-                    min_cost = cost
+            if len(transitions) == 0:
+                time_step = seq.drive_area[i-1][-1]['step']
+                space_ = reach_set_backward(space_prev, param)
+                space_ = translate(space_, dist, 0)
+                space_ = space_.intersection(seq.drive_area[i - 1][-1]['space'])
+            else:
+                for t in transitions:
+                    cost = cost_reference_trajectory(ref_traj, t, offset[i-1])
+                    if cost < min_cost:
+                        time_step = t['step']
+                        space_ = t['space']
+                        min_cost = cost
 
             space[time_step] = space_
             plan[time_step] = seq.lanelets[i-1]
