@@ -777,7 +777,7 @@ def refine_plan(seq, ref_traj, lanelets, param):
             # check if it is possible to change lanelets in this time step
             if i > 0 and seq.drive_area[i-1][cnt]['step'] == j:
                 if is_successor:
-                    if space_prev.bounds[0] <= -0.1:
+                    if space_prev.bounds[0] <= 0:
                         space_ = translate(space_prev, dist, 0)
                         space_ = space_.intersection(seq.drive_area[i - 1][cnt]['space'])
                         transitions.append({'space': space_, 'step': j})
@@ -787,23 +787,22 @@ def refine_plan(seq, ref_traj, lanelets, param):
                         transitions.append({'space': space_, 'step': j})
                 cnt = cnt - 1
 
+            # catch special case where time steps do not overlap
+            if i > 0 and is_successor and j == seq.drive_area[i][0]['step'] and seq.drive_area[i-1][cnt]['step'] == j-1:
+                space_ = translate(space_prev, dist, 0)
+                transitions.append({'space': space_, 'step': j})
+
         # select the best transition to take to the previous lanelet
         if i > 0:
 
             min_cost = np.inf
 
-            if len(transitions) == 0:
-                time_step = seq.drive_area[i-1][-1]['step']
-                space_ = reach_set_backward(space_prev, param)
-                space_ = translate(space_, dist, 0)
-                space_ = space_.intersection(seq.drive_area[i - 1][-1]['space'])
-            else:
-                for t in transitions:
-                    cost = cost_reference_trajectory(ref_traj, t, offset[i-1])
-                    if cost < min_cost:
-                        time_step = t['step']
-                        space_ = t['space']
-                        min_cost = cost
+            for t in transitions:
+                cost = cost_reference_trajectory(ref_traj, t, offset[i-1])
+                if cost < min_cost:
+                    time_step = t['step']
+                    space_ = t['space']
+                    min_cost = cost
 
             space[time_step] = space_
             plan[time_step] = seq.lanelets[i-1]
@@ -1030,7 +1029,8 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, param, lanelets)
     for i in range(len(ind)):
 
         # check if it is a lane change or just a change onto a successor lanelet
-        if plan[ind[i]+1] not in lanelets[plan[ind[i]]].successor:
+        if (lanelets[plan[ind[i]]].adj_right is not None and lanelets[plan[ind[i]]].adj_right == plan[ind[i]+1]) or \
+                (lanelets[plan[ind[i]]].adj_left is not None and lanelets[plan[ind[i]]].adj_left == plan[ind[i] + 1]):
 
             # compute start and end time step for the lane change
             ind_start = max(time_lane[i][0]+1, ind[i] - np.floor(DES_LANE_CHANGE/2)).astype(int)
