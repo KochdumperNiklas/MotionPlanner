@@ -154,7 +154,11 @@ def intersects_lanelet(lanelet, pgon):
 
     if lanelet.polygon.shapely_object.intersects(pgon):
 
-        set = lanelet.polygon.shapely_object.intersection(pgon)
+        if lanelet.polygon.shapely_object.is_valid:
+            set = lanelet.polygon.shapely_object.intersection(pgon)
+        else:
+            lane = lanelet.polygon.shapely_object.buffer(0)
+            set = lane.intersection(pgon)
 
         if isinstance(set, Polygon):
             res = True
@@ -398,7 +402,11 @@ def projection_lanelet_centerline(lanelet, pgon):
     """project a polygon to the center line of the lanelet to determine the occupied space"""
 
     # intersect polygon with lanelet
-    o_int = lanelet.polygon.shapely_object.intersection(pgon)
+    if lanelet.polygon.shapely_object.is_valid:
+        o_int = lanelet.polygon.shapely_object.intersection(pgon)
+    else:
+        lane = lanelet.polygon.shapely_object.buffer(0)
+        o_int = lane.intersection(pgon)
 
     vx, vy = o_int.exterior.coords.xy
     V = np.stack((vx, vy))
@@ -780,10 +788,14 @@ def refine_plan(seq, ref_traj, lanelets, param):
                     if space_prev.bounds[0] <= 0:
                         space_ = translate(space_prev, dist, 0)
                         space_ = space_.intersection(seq.drive_area[i - 1][cnt]['space'])
+                        if not isinstance(space_, Polygon):
+                            space_ = space_.convex_hull
                         transitions.append({'space': space_, 'step': j})
                 else:
                     if space[j].intersects(seq.drive_area[i - 1][cnt]['space']):
                         space_ = space[j].intersection(seq.drive_area[i - 1][cnt]['space'])
+                        if not isinstance(space_, Polygon):
+                            space_ = space_.convex_hull
                         transitions.append({'space': space_, 'step': j})
                 cnt = cnt - 1
 
