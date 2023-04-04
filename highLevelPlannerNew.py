@@ -1312,15 +1312,17 @@ def lanelet2global(space, plan, lanelets, width=None):
 
             if lower >= lanelet.distance[j] and lower <= lanelet.distance[j+1]:
 
+                frac = (lower - lanelet.distance[j])/(lanelet.distance[j+1] - lanelet.distance[j])
+
                 d = lanelet.left_vertices[j + 1] - lanelet.left_vertices[j]
-                p_left = lanelet.left_vertices[j] + d/np.linalg.norm(d) * (lower - lanelet.distance[j])
+                p_left = lanelet.left_vertices[j] + d * frac
                 left_vertices.append(Point(p_left[0], p_left[1]))
 
                 d = lanelet.right_vertices[j + 1] - lanelet.right_vertices[j]
-                p_right = lanelet.right_vertices[j] + d / np.linalg.norm(d) * (lower - lanelet.distance[j])
+                p_right = lanelet.right_vertices[j] + d * frac
                 right_vertices.append(Point(p_right[0], p_right[1]))
 
-            if lower <= lanelet.distance[j] <= lanelet.distance[j+1]:
+            if lower <= lanelet.distance[j] <= upper:
 
                 p_left = lanelet.left_vertices[j]
                 left_vertices.append(Point(p_left[0], p_left[1]))
@@ -1330,12 +1332,14 @@ def lanelet2global(space, plan, lanelets, width=None):
 
             if upper >= lanelet.distance[j] and upper <= lanelet.distance[j+1]:
 
+                frac = (upper - lanelet.distance[j]) / (lanelet.distance[j + 1] - lanelet.distance[j])
+
                 d = lanelet.left_vertices[j + 1] - lanelet.left_vertices[j]
-                p_left = lanelet.left_vertices[j] + d / np.linalg.norm(d) * (upper - lanelet.distance[j])
+                p_left = lanelet.left_vertices[j] + d * frac
                 left_vertices.append(Point(p_left[0], p_left[1]))
 
                 d = lanelet.right_vertices[j + 1] - lanelet.right_vertices[j]
-                p_right = lanelet.right_vertices[j] + d / np.linalg.norm(d) * (upper - lanelet.distance[j])
+                p_right = lanelet.right_vertices[j] + d * frac
                 right_vertices.append(Point(p_right[0], p_right[1]))
 
                 break
