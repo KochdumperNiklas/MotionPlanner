@@ -1377,13 +1377,17 @@ def union_robust(pgon1, pgon2):
     # compute union using build-in function
     pgon = pgon1.union(pgon2)
 
-    # bloat the polygon by a small cube
-    pgon_bloat = pgon
-
-    if isinstance(pgon, MultiPolygon):
-        polygons = list(pgon.geoms)
+    # convert to a list of polygons in case the polygons are disconnected
+    if not isinstance(pgon, Polygon):
+        polygons = []
+        for p in list(pgon.geoms):
+            if isinstance(p, Polygon):
+                polygons.append(p)
     else:
         polygons = [pgon]
+
+    # bloat the polygon by a small cube
+    pgon_bloat = pgon
 
     for p in polygons:
 
