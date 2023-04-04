@@ -15,7 +15,7 @@ W_LANE_CHANGE = 1000
 W_DIST = 1
 
 # safety distance to other cars
-DIST_SAFE = 2
+DIST_SAFE = 1.5
 
 # minimum number of consecutive time steps required to perform a lane change
 MIN_LANE_CHANGE = 2
@@ -775,25 +775,36 @@ def add_transition(transitions, space, time_step, lanelet, param):
 def create_branch(space, time_step, free_space, x0, lanelet, param):
     """create a new seach path if the driveable area intersects multiple free space segments"""
 
+    cnt = 0
+
     # create first element
     x0_new = [{'space': space, 'step': time_step, 'lanelet': lanelet}]
 
     # loop over all possible transitions from the previous lanelet
-    for x in x0:
+    if x0[0]['step'] >= time_step:
 
-        # compute forward reachable set
-        space = reach_set_forward(space, param)
+        for i in range(time_step, param['steps']):
 
-        # intersect with free space
-        for fs in free_space[lanelet][time_step]:
-            if fs.intersects(space):
-                space = fs.intersection(space)
+            # compute forward reachable set
+            space = reach_set_forward(space, param)
 
-        # check if space intersects the space from the transition
-        if x['space'].intersects(space):
-            x0_new.append(x)
+            # check if it is possible to lane change in from previous lanelet
+            lane_change = False
 
-        time_step = time_step + 1
+            if cnt+1 < len(x0)-1 and x0[cnt+1]['step'] == i+1 and x0[cnt+1]['space'].intersects(space):
+                space = space.union(x0[cnt+1]['space'])
+                space = space.convex_hull
+                cnt = cnt + 1
+                lane_change = True
+
+            # intersect with free space
+            for fs in free_space[lanelet][time_step]:
+                if fs.intersects(space):
+                    space = fs.intersection(space)
+
+            # add new transition
+            if lane_change:
+                x0_new.append({'space': space, 'step': i, 'lanelet': lanelet})
 
     return x0_new
 
@@ -904,7 +915,7 @@ def refine_plan(seq, ref_traj, lanelets, param):
                 cnt = cnt - 1
 
             # catch special case where time steps do not overlap
-            if i > 0 and is_successor and j == seq.drive_area[i][0]['step'] and seq.drive_area[i-1][cnt]['step'] == j-1:
+            if i > 0 and is_successor and j == seq.drive_area[i][0]['step'] and seq.drive_area[i-1][-1]['step'] == j-1:
                 space_ = translate(space_prev, dist, 0)
                 transitions.append({'space': space_, 'step': j})
 
