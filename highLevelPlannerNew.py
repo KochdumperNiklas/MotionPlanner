@@ -1367,6 +1367,9 @@ def lanelet2global(space, plan, lanelets, width=None):
         for p in pgons:
             pgon = union_robust(pgon, p)
 
+        if not pgon.is_valid:
+            pgon = pgon.buffer(0)
+
         space_xy.append(pgon)
 
     return space_xy
