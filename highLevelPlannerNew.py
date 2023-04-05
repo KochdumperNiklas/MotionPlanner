@@ -87,15 +87,18 @@ def initialization(scenario, planning_problem, param):
     # determine lanelet and corresponding space for the initial state
     x0 = planning_problem.initial_state.position
 
+    pgon = interval2polygon([x0[0] - 0.01, x0[1] - 0.01], [x0[0] + 0.01, x0[1] + 0.01])
+    x0_id = []
+    x0_set = []
+
     for id in lanelets.keys():
         if lanelets[id].polygon.shapely_object.contains(Point(x0[0], x0[1])):
-            x0_id = id
-
-    pgon = interval2polygon([x0[0] - 0.01, x0[1] - 0.01], [x0[0] + 0.01, x0[1] + 0.01])
-    x0_space_start, x0_space_end, _, _ = projection_lanelet_centerline(lanelets[x0_id], pgon)
+            x0_id.append(id)
+            x0_space_start, x0_space_end, _, _ = projection_lanelet_centerline(lanelets[id], pgon)
+            x0_set.append(0.5 * (x0_space_start + x0_space_end))
 
     param['x0_lane'] = x0_id
-    param['x0_set'] = 0.5 * (x0_space_start + x0_space_end)
+    param['x0_set'] = x0_set
     param['x0'] = x0
     param['orientation'] = planning_problem.initial_state.orientation
 
@@ -228,9 +231,16 @@ def velocity_profile(dist, param):
 
     if param['goal_lane'] is not None:
 
+        # determine initial lanelet with the minimum distance to the goal
+        ind = 0
+
+        for i in range(1, len(param['x0_lane'])):
+            if dist_goal[param['x0_lane'][i]] < dist_goal[param['x0_lane'][ind]]:
+                ind = i
+
         # calculate minimum and maximum distance from initial state to goal set
-        dist_min = dist[param['x0_lane']] - param['x0_set'] + param['goal_set'].bounds[0]
-        dist_max = dist[param['x0_lane']] - param['x0_set'] + param['goal_set'].bounds[2]
+        dist_min = dist[param['x0_lane'][ind]] - param['x0_set'][ind] + param['goal_set'].bounds[0]
+        dist_max = dist[param['x0_lane'][ind]] - param['x0_set'][ind] + param['goal_set'].bounds[2]
 
         # calculate minimum and maximum final velocities required to reach the goal set using a linear velocity profile
         vel_min_ = 2*dist_min/(param['goal_time_end']*param['time_step']) - param['v_init']
@@ -540,12 +550,15 @@ def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, partially
 
     min_cost = None
 
-    # create initial node
+    # create initial nodes
+    queue = []
     v = param['v_init']
-    space = interval2polygon([param['x0_set'] - 0.01, v - 0.01], [param['x0_set'] + 0.01, v + 0.01])
-    x0 = {'step': 0, 'space': space, 'lanelet': param['x0_lane']}
 
-    queue = [Node([x0], [], [], 'none', ref_traj, change_goal, lanelets)]
+    for i in range(len(param['x0_lane'])):
+
+        space = interval2polygon([param['x0_set'][i] - 0.01, v - 0.01], [param['x0_set'][i] + 0.01, v + 0.01])
+        x0 = {'step': 0, 'space': space, 'lanelet': param['x0_lane'][i]}
+        queue.append(Node([x0], [], [], 'none', ref_traj, change_goal, lanelets))
 
     # loop until queue empty -> all possible lanelet sequences have been explored
     while len(queue) > 0:
@@ -832,7 +845,7 @@ def velocity2trajectory(vel_prof, param):
     """compute the reference trajectory for the given velocity profile"""
 
     ref_traj = []
-    x = param['x0_set']
+    x = param['x0_set'][0]
 
     for i in range(len(vel_prof)):
         ref_traj.append((x, vel_prof[i]))
@@ -1212,7 +1225,7 @@ def trajectory_position_velocity(space, plan, vel_prof, lanelets, param):
 
     v = np.asarray(vel_prof)
     x = np.zeros(v.shape)
-    x[0] = param['x0_set']
+    x[0] = param['x0_set'][0]
 
     dist = 0
 
