@@ -1363,12 +1363,12 @@ def lanelet2global(space, plan, lanelets, width=None):
 
         pgon = Polygon(left_vertices)
 
+        if not pgon.is_valid:
+            pgon = pgon.buffer(0)
+
         # unite with polygons from predecessor and successor lanelets
         for p in pgons:
             pgon = union_robust(pgon, p)
-
-        if not pgon.is_valid:
-            pgon = pgon.buffer(0)
 
         space_xy.append(pgon)
 
