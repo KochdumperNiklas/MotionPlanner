@@ -9,17 +9,15 @@ import numpy as np
 from os import listdir
 from os.path import isfile, join
 
-from highLevelPlannerNew import highLevelPlannerNew
-from highLevelPlanner import highLevelPlanner
-from lowLevelPlannerNew import lowLevelPlannerNew
+from vehicle.vehicleParameter import vehicleParameter
+from src.highLevelPlanner import highLevelPlanner
+from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
+
+import warnings
+warnings.filterwarnings("ignore")
 
 # parameter for the car
-param = {}
-param['length'] = 4.3                   # length of the car
-param['width'] = 1.7                    # width of the car
-param['wheelbase'] = 2.3                # length of the wheelbase
-param['a_max'] = 9                      # maximum acceleration
-param['s_max'] = np.deg2rad(24.0)       # maximum steering angle
+param = vehicleParameter()
 
 # get all available CommonRoad scenarios
 path = 'scenarios'
@@ -33,8 +31,10 @@ for f in files:
 
     # run the motion planner
     try:
-        plan, vel, space, ref_traj = highLevelPlannerNew(scenario, planning_problem, param)
-        x, u = lowLevelPlannerNew(scenario, planning_problem, param, plan, vel, space, ref_traj)
-        print(f + ': success')
+        plan, vel, space, ref_traj = highLevelPlanner(scenario, planning_problem, param)
+        x, u = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space, ref_traj)
+        if x is None:
+            print(f + ': failed')
+        #print(f + ': success')
     except:
         print(f + ': failed')

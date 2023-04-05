@@ -6,41 +6,34 @@ from commonroad.visualization.draw_params import ShapeParams
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import pickle
 
-from highLevelPlannerNew import highLevelPlannerNew
-from highLevelPlanner import highLevelPlanner
-from lowLevelPlanner import lowLevelPlanner
-from lowLevelPlannerNew import lowLevelPlannerNew
-from lowLevelPlannerOptimization import lowLevelPlannerOptimization
+from vehicle.vehicleParameter import vehicleParameter
+from src.highLevelPlanner import highLevelPlanner
+from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
+from src.lowLevelPlannerOptimization import lowLevelPlannerOptimization
 
-# parameter for the car
-param = {}
-param['length'] = 4.3                   # length of the car
-param['width'] = 1.7                    # width of the car
-param['wheelbase'] = 2.3                # length of the wheelbase
-param['a_max'] = 9                      # maximum acceleration
-param['s_max'] = np.deg2rad(24.0)       # maximum steering angle
+import warnings
+warnings.filterwarnings("ignore")
 
 # select the CommonRoad scenario that should be solved
 file = "ZAM_Zip-1_19_T-1.xml"
 file = "ZAM_Tutorial-1_1_T-1.xml"
-#file = "USA_US101-6_2_T-1.xml"
-#file = "USA_US101-7_1_T-1.xml"
-#file = "ZAM_HW-1_1_S-1.xml"
-file = "FRA_Sete-1_1_T-1.xml"
-file = "BEL_Putte-4_2_T-1.xml"
-#file = "RUS_Bicycle-3_1_T-1.xml"
-file = "ESP_Monzon-2_1_T-1.xml"
-file = "BEL_Zwevegem-2_3_T-1.xml"
+#file = "FRA_Sete-1_1_T-1.xml"
+#file = "BEL_Putte-4_2_T-1.xml"
+#file = "ESP_Monzon-2_1_T-1.xml"
+
+# load parameter for the car
+param = vehicleParameter()
 
 # load the CommonRoad scenario
 scenario, planning_problem = CommonRoadFileReader(os.path.join('scenarios', file)).open()
 
 # high-level planner: decides on which lanelets to be at which points in time
-plan, vel, space, ref_traj = highLevelPlannerNew(scenario, planning_problem, param)
+plan, vel, space, ref_traj = highLevelPlanner(scenario, planning_problem, param)
 
 # low-level planner: plans a concrete trajectory for the high-level plan
-x, u = lowLevelPlannerNew(scenario, planning_problem, param, plan, vel, space, ref_traj)
+x, u = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space, ref_traj)
 
 # visualization
 plt.figure(figsize=(25, 10))
