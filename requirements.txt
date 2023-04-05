@@ -1,3 +1,6 @@
 commonroad-io>=2022.3
 matplotlib>=3.3.4
 casadi>=3.5.5
+opencv-python>=4.7.0.72
+numpy>=1.22.4
+shapely>=2.0.1
