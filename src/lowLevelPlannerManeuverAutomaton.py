@@ -15,6 +15,7 @@ from ManeuverAutomaton import ManeuverAutomaton
 # planning horizon for A*-search
 HORIZON = 2
 
+
 def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space_all, ref_traj):
     """plan a concrete trajectory for the given high-level plan using a maneuver automaton"""
 
@@ -31,9 +32,11 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
     queue = []
     cnt = 0
     fixed = []
+    phi = node.x[3, -1]
+    T = scipy.linalg.block_diag(np.array([[np.cos(phi), -np.sin(phi)], [np.sin(phi), np.cos(phi)]]), np.eye(2))
 
     for i in ind:
-        queue.append(expand_node(node, MA.primitives[i], i, ref_traj, fixed))
+        queue.append(expand_node(node, MA.primitives[i], i, ref_traj, fixed, T))
 
     # loop until goal set is reached or queue is empty
     while len(queue) > 0:
@@ -67,9 +70,13 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
                 u = extract_control_inputs(node, MA.primitives)
                 return node.x[:, :ind], u[:, :ind]
 
+            # precompute transformation matrix for speed-up
+            phi = node.x[3, -1]
+            T = scipy.linalg.block_diag(np.array([[np.cos(phi), -np.sin(phi)], [np.sin(phi), np.cos(phi)]]), np.eye(2))
+
             # construct child nodes
             for i in primitive.successors:
-                queue.append(expand_node(node, MA.primitives[i], i, ref_traj, fixed))
+                queue.append(expand_node(node, MA.primitives[i], i, ref_traj, fixed, T))
 
     return None, None
 
@@ -173,16 +180,14 @@ def plot_trajectory(node, scenario, plan, ref_traj, param):
     plt.axis('equal')
     plt.show()
 
-def expand_node(node, primitive, ind, ref_traj, fixed):
+def expand_node(node, primitive, ind, ref_traj, fixed, T):
     """add a new primitive to a node"""
 
     # add current primitive to the list of primitives
     primitives = node.primitives + [ind]
 
     # combine trajectories
-    phi = node.x[3, -1]
-    T = scipy.linalg.block_diag(np.array([[np.cos(phi), -np.sin(phi)], [np.sin(phi), np.cos(phi)]]), np.eye(2))
-    x_ = T @ primitive.x + np.array([[node.x[0, -1]], [node.x[1, -1]], [0], [phi]])
+    x_ = T @ primitive.x + np.array([[node.x[0, -1]], [node.x[1, -1]], [0], [node.x[3, -1]]])
     x = np.concatenate((node.x[:, :-1], x_), axis=1)
 
     # compute costs
