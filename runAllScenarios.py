@@ -10,8 +10,10 @@ from os import listdir
 from os.path import isfile, join
 import time
 import multiprocessing
+import pickle
 
 from vehicle.vehicleParameter import vehicleParameter
+from maneuverAutomaton.ManeuverAutomaton import ManeuverAutomaton
 from auxiliary.createVideo import createVideo
 from src.highLevelPlanner import highLevelPlanner
 from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
@@ -30,11 +32,15 @@ def solve_scenario(file, return_dict):
     # load the CommonRoad scenario
     scenario, planning_problem = CommonRoadFileReader(os.path.join('scenarios', file)).open()
 
+    # load maneuver automaton
+    filehandler = open('./maneuverAutomaton/maneuverAutomaton.obj', 'rb')
+    MA = pickle.load(filehandler)
+
     # run the motion planner
     try:
         start_time = time.time()
         plan, vel, space, ref_traj = highLevelPlanner(scenario, planning_problem, param)
-        x, u = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space, ref_traj)
+        x, u = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space, ref_traj, MA)
         comp_time = time.time() - start_time
         if x is None:
             print(f + ': failed')

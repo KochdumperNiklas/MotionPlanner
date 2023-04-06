@@ -8,11 +8,13 @@ import os
 import numpy as np
 from os import listdir
 from os.path import isfile, join
+import pickle
 
 import sys
 sys.path.append('./')
 
 from vehicle.vehicleParameter import vehicleParameter
+from maneuverAutomaton.ManeuverAutomaton import ManeuverAutomaton
 from src.highLevelPlanner import highLevelPlanner
 from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
 
@@ -21,6 +23,10 @@ warnings.filterwarnings("ignore")
 
 # load parameter for the car
 param = vehicleParameter()
+
+# load maneuver automaton
+filehandler = open('./maneuverAutomaton/maneuverAutomaton.obj', 'rb')
+MA = pickle.load(filehandler)
 
 # scenarios that are working
 path = 'scenarios'
@@ -37,5 +43,5 @@ for f in files:
 
     # run the motion planner
     plan, vel, space, ref_traj = highLevelPlanner(scenario, planning_problem, param)
-    x, u = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space, ref_traj)
+    x, u = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space, ref_traj, MA)
     print(f + ': success')

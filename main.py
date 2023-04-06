@@ -9,6 +9,7 @@ import os
 import pickle
 
 from vehicle.vehicleParameter import vehicleParameter
+from maneuverAutomaton.ManeuverAutomaton import ManeuverAutomaton
 from src.highLevelPlanner import highLevelPlanner
 from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
 from src.lowLevelPlannerOptimization import lowLevelPlannerOptimization
@@ -18,13 +19,18 @@ warnings.filterwarnings("ignore")
 
 # select the CommonRoad scenario that should be solved
 file = "ZAM_Zip-1_19_T-1.xml"
-file = "ZAM_Tutorial-1_1_T-1.xml"
+#file = "ZAM_Tutorial-1_1_T-1.xml"
 #file = "FRA_Sete-1_1_T-1.xml"
 #file = "BEL_Putte-4_2_T-1.xml"
 #file = "ESP_Monzon-2_1_T-1.xml"
+#file = "DEU_Backnang-9_1_T-1.xml"
 
 # load parameter for the car
 param = vehicleParameter()
+
+# load maneuver automaton
+filehandler = open('./maneuverAutomaton/maneuverAutomaton.obj', 'rb')
+MA = pickle.load(filehandler)
 
 # load the CommonRoad scenario
 scenario, planning_problem = CommonRoadFileReader(os.path.join('scenarios', file)).open()
@@ -33,7 +39,7 @@ scenario, planning_problem = CommonRoadFileReader(os.path.join('scenarios', file
 plan, vel, space, ref_traj = highLevelPlanner(scenario, planning_problem, param)
 
 # low-level planner: plans a concrete trajectory for the high-level plan
-x, u = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space, ref_traj)
+x, u = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space, ref_traj, MA)
 
 # visualization
 plt.figure(figsize=(25, 10))
@@ -53,4 +59,7 @@ for i in range(0, x.shape[1]):
     rnd.render()
     plt.xlim([min(x[0, :]) - 20, max(x[0, :]) + 20])
     plt.ylim([min(x[1, :]) - 20, max(x[1, :]) + 20])
+    ax = plt.gca()
+    ax.axes.xaxis.set_ticks([])
+    ax.axes.yaxis.set_ticks([])
     plt.pause(0.1)

@@ -16,12 +16,8 @@ from ManeuverAutomaton import ManeuverAutomaton
 HORIZON = 2
 
 
-def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space_all, ref_traj):
+def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space_all, ref_traj, MA):
     """plan a concrete trajectory for the given high-level plan using a maneuver automaton"""
-
-    # load the maneuver automaton
-    filehandler = open('./maneuverAutomaton/maneuverAutomaton.obj', 'rb')
-    MA = pickle.load(filehandler)
 
     # construct initial state
     x = np.expand_dims(np.array([param['x0'][0], param['x0'][1], param['v_init'], param['orientation']]), 1)
