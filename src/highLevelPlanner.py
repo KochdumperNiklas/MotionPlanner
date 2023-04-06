@@ -1075,17 +1075,17 @@ def space_lane_changes(space, plan, lanelets, free_space, partially_occupied, pa
         time[i] = np.asarray(time[i])
         time[i] = np.sort(time[i])
 
-        # remove partially occupied space from the free space
-        lanes = np.unique(plan)
+    # remove partially occupied space from the free space
+    lanes = np.unique(plan)
 
-        for i in range(len(space_glob)):
-            for l in lanes:
-                for p in partially_occupied[l][i]:
+    for i in range(len(space_glob)):
+        for l in lanes:
+            for p in partially_occupied[l][i]:
 
-                    sp = lanelet2global([p['space']], [l], lanelets, p['width'])[0]
+                sp = lanelet2global([p['space']], [l], lanelets, p['width'])[0]
 
-                    if sp.intersects(space_glob[i]):
-                        space_glob[i] = space_glob[i].difference(sp)
+                if sp.intersects(space_glob[i]):
+                    space_glob[i] = space_glob[i].difference(sp)
 
     return space_glob, time
 
