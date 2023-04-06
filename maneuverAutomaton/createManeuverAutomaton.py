@@ -51,7 +51,7 @@ while v_init < v_end:
                     if abs(steer) < s_max:
 
                         # simulate the system
-                        ode = lambda t, x, u1, u2: [x[2] * np.cos(x[3]) + wb/2 * np.sin(x[3]) * x[2] * np.tan(u2) / wb,
+                        ode = lambda t, x, u1, u2: [x[2] * np.cos(x[3]) - wb/2 * np.sin(x[3]) * x[2] * np.tan(u2) / wb,
                                                     x[2] * np.sin(x[3]) + wb/2 * np.cos(x[3]) * x[2] * np.tan(u2) / wb,
                                                     u1,
                                                     x[2] * np.tan(u2) / wb]
