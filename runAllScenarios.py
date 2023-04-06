@@ -9,6 +9,7 @@ import numpy as np
 from os import listdir
 from os.path import isfile, join
 import time
+import multiprocessing
 
 from vehicle.vehicleParameter import vehicleParameter
 from auxiliary.createVideo import createVideo
@@ -19,20 +20,15 @@ import warnings
 warnings.filterwarnings("ignore")
 
 VIDEO = False           # create videos for all scenarios that can be solved
+TIMEOUT = 100           # maximum computation time
 
-# parameter for the car
-param = vehicleParameter()
+def solve_scenario(file, return_dict):
+    """solve a single motion planning problem"""
 
-# get all available CommonRoad scenarios
-path = 'scenarios'
-files = [f for f in listdir(path) if isfile(join(path, f))]
-data = []
-
-# loop over all scenarios
-for f in files:
+    comp_time = 'error'
 
     # load the CommonRoad scenario
-    scenario, planning_problem = CommonRoadFileReader(os.path.join('scenarios', f)).open()
+    scenario, planning_problem = CommonRoadFileReader(os.path.join('scenarios', file)).open()
 
     # run the motion planner
     try:
@@ -42,18 +38,57 @@ for f in files:
         comp_time = time.time() - start_time
         if x is None:
             print(f + ': failed')
+            comp_time = 'failed'
         else:
             final_time = x.shape[1] * param['time_step']
             comp_time = comp_time / final_time
-            data.append([f, comp_time])
             if VIDEO:
                 createVideo(f, scenario, planning_problem, param, x)
     except:
         print(f + ': failed')
 
-# save computation time in .csv file
-np.savetxt('computation_time.csv', np.asarray(data), delimiter=",", fmt="%s")
+    return_dict['comp_time'] = comp_time
 
-# display results
-print(' ')
-print('success rate: ' + str(len(data)/len(files) * 100) + "%")
+if __name__ == "__main__":
+    """main entry point"""
+
+    # parameter for the car
+    param = vehicleParameter()
+
+    # get all available CommonRoad scenarios
+    path = 'scenarios'
+    files = [f for f in listdir(path) if isfile(join(path, f))]
+    data = []
+    cnt = 0
+
+    # loop over all scenarios
+    for f in files:
+
+        # solve the scenario
+        manager = multiprocessing.Manager()
+        return_dict = manager.dict()
+        p = multiprocessing.Process(target=solve_scenario, args=(f, return_dict))
+        p.start()
+
+        # kill process if the computation time exceeds the maximum
+        p.join(TIMEOUT)
+
+        # get results from the process
+        if p.is_alive():
+            p.terminate()
+            p.join()
+            comp_time = 'timeout'
+        else:
+            comp_time = return_dict['comp_time']
+
+        data.append([f, comp_time])
+
+        if not isinstance(comp_time, str):
+            cnt = cnt + 1
+
+    # save computation time in .csv file
+    np.savetxt('computation_time.csv', np.asarray(data), delimiter=",", fmt="%s")
+
+    # display results
+    print(' ')
+    print('success rate: ' + str(cnt/len(files) * 100) + "%")
