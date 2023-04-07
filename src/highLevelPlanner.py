@@ -131,7 +131,7 @@ def initialization(scenario, planning_problem, param):
             param['goal_lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[0][0]
             l = lanelets[param['goal_lane']]
             param['goal_space'] = l.polygon.shapely_object
-            goal_space_start, goal_space_end = projection_lanelet_centerline(l, l.polygon.shapely_object)
+            goal_space_start, goal_space_end, _, _ = projection_lanelet_centerline(l, l.polygon.shapely_object)
 
     if hasattr(planning_problem.goal.state_list[0], 'velocity'):
         v = planning_problem.goal.state_list[0].velocity
@@ -235,7 +235,7 @@ def velocity_profile(dist, param):
         ind = 0
 
         for i in range(1, len(param['x0_lane'])):
-            if dist_goal[param['x0_lane'][i]] < dist_goal[param['x0_lane'][ind]]:
+            if dist[param['x0_lane'][i]] < dist[param['x0_lane'][ind]]:
                 ind = i
 
         # calculate minimum and maximum distance from initial state to goal set
