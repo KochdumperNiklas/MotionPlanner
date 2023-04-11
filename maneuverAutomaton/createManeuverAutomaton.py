@@ -43,10 +43,13 @@ while v_init < v_end:
             # loop over all final orientations
             for o in orientation:
 
-                if abs(v_init * tFinal + 0.5*acc * tFinal**2) > 0:
+                if o == 0 or abs(v_init * tFinal + 0.5*acc * tFinal**2) > 0:
 
                     # compute the required steering angle to achieve the desired final orientation
-                    steer = np.arctan(wb * o / (v_init * tFinal + 0.5*acc * tFinal**2))
+                    if o == 0:
+                    	steer = 0
+                    else:
+                    	steer = np.arctan(wb * o / (v_init * tFinal + 0.5*acc * tFinal**2))
 
                     if abs(steer) < s_max:
 
