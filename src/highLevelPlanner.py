@@ -999,6 +999,19 @@ def space_lane_changes(space, plan, lanelets, free_space, partially_occupied, pa
                     pgon = lanelet2global([f], [suc], lanelets)
                     space_glob[i] = union_robust(space_glob[i], pgon[0])
 
+    # if initial state is on multiple lanelets, add the space on these lanelets to the free space
+    for i in range(len(param['x0_lane'])):
+        l = param['x0_lane'][i]
+        if l != plan[0]:
+            cnt = 0
+            while cnt < len(plan) and plan[cnt] == plan[0]:
+                for f in free_space[l][cnt]:
+                    if f.bounds[0] <= param['x0_set'][i] <= f.bounds[2]:
+                        pgon = lanelet2global([f], [l], lanelets)
+                        if pgon[0].intersects(space_glob[cnt]):
+                            space_glob[cnt] = union_robust(space_glob[cnt], pgon[0])
+                cnt = cnt + 1
+
     # loop over all lane changes
     for i in range(len(ind)):
 
