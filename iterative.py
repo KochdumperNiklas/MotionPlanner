@@ -8,12 +8,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pickle
+from copy import deepcopy
 
 from vehicle.vehicleParameter import vehicleParameter
 from maneuverAutomaton.ManeuverAutomaton import ManeuverAutomaton
 from src.highLevelPlanner import highLevelPlanner
 from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
 from src.lowLevelPlannerOptimization import lowLevelPlannerOptimization
+from auxiliary.prediction import prediction
 
 from commonroad.scenario.lanelet import Lanelet
 from commonroad.scenario.lanelet import LaneletNetwork
@@ -65,6 +67,7 @@ route = candidate_holder.retrieve_first_route()
 # initialization
 state = planning_problem.initial_state
 x0 = np.concatenate((state.position, np.array([state.velocity, state.orientation])))
+#x0 = np.concatenate((state.position, np.array([5, state.orientation])))
 lanelet = route.list_ids_lanelets[0]
 cnt_goal = 0
 cnt_init = 0
@@ -82,6 +85,12 @@ while lanelet != route.list_ids_lanelets[-1]:
     if d < 15:
         cnt_goal = cnt_goal + 1
 
+    # predict future positions of the surrounding traffic participants
+    vehicles = [{'width': 2, 'length': 5, 'x': 380, 'y': -2, 'velocity': 10, 'orientation': 0}]
+    vehicles.append({'width': 2, 'length': 5, 'x': 320, 'y': -2, 'velocity': 10, 'orientation': 0})
+
+    scenario_ = prediction(vehicles, deepcopy(scenario), HORIZON)
+
     # create motion planning problem
     goal_id = route.list_ids_lanelets[cnt_goal]
     goal_lane = scenario.lanelet_network.find_lanelet_by_id(route.list_ids_lanelets[cnt_goal])
@@ -91,8 +100,8 @@ while lanelet != route.list_ids_lanelets[-1]:
     planning_problem = PlanningProblemSet([PlanningProblem(1, initial_state, goal_region)])
 
     # solve motion planning problem
-    plan, vel, space, ref_traj = highLevelPlanner(scenario, planning_problem, param)
-    x, u = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space, ref_traj, MA)
+    plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param)
+    x, u = lowLevelPlannerManeuverAutomaton(scenario_, planning_problem, param, plan, vel, space, ref_traj, MA)
 
     # visualization
     for i in range(REPLAN):
@@ -100,13 +109,38 @@ while lanelet != route.list_ids_lanelets[-1]:
         rnd = MPRenderer()
 
         rnd.draw_params.time_begin = i
+        rnd.draw_params.time_end = HORIZON
+        """rnd.draw_params.initial_state.time_begin = HORIZON
+        rnd.draw_params.initial_state.state.facecolor = None
+        rnd.draw_params.initial_state.state = None"""
+        rnd.draw_params.planning_problem_set.planning_problem.initial_state.state.draw_arrow = False
+        rnd.draw_params.planning_problem_set.planning_problem.initial_state.state.radius = 0
         scenario.draw(rnd)
         planning_problem.draw(rnd)
 
-        settings = ShapeParams(opacity=1, edgecolor="k", linewidth=0.0, zorder=17, facecolor='r')
-        r = Rectangle(length=param['length'], width=param['width'], center=np.array([x[0, i], x[1, i]]),
-                      orientation=x[3, i])
-        r.draw(rnd, settings)
+        # plot prediction for the other vehicles
+        for d in scenario_.dynamic_obstacles:
+            for j in range(len(d.prediction.trajectory.state_list), 0, -1):
+                s = d.prediction.trajectory.state_list[j-1]
+                if s.time_step >= i:
+                    if s.time_step == i:
+                        settings = ShapeParams(opacity=1, edgecolor="k", linewidth=1.0, facecolor='#1d7eea')
+                    else:
+                        settings = ShapeParams(opacity=0.2, edgecolor="k", linewidth=0.0, facecolor='#1d7eea')
+                    r = Rectangle(length=d.obstacle_shape.length, width=d.obstacle_shape.width, center=s.position,
+                                  orientation=s.orientation)
+                    r.draw(rnd, settings)
+
+        # plot planned trajectory
+        for j in range(x.shape[1]-1, -1, -1):
+            if j >= i:
+                if j == i:
+                    settings = ShapeParams(opacity=1, edgecolor="k", linewidth=1.0, facecolor='r')
+                else:
+                    settings = ShapeParams(opacity=0.2, edgecolor="k", linewidth=0.0, facecolor='r')
+                r = Rectangle(length=param['length'], width=param['width'], center=np.array([x[0, j], x[1, j]]),
+                              orientation=x[3, j])
+                r.draw(rnd, settings)
 
         rnd.render()
         plt.xlim([min(x[0, :]) - 20, max(x[0, :]) + 20])
