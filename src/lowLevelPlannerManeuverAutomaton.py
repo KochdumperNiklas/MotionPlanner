@@ -91,7 +91,7 @@ def collision_check(node, primitive, space, vel, param):
 
     v_final = node.x[2, index]
 
-    if v_final <= vel[index][0] or v_final >= vel[index][1]:
+    if v_final <= vel[index][0] - 1e-10 or v_final >= vel[index][1] + 1e-10:
         return False
 
     # get state at the before the last primitive
