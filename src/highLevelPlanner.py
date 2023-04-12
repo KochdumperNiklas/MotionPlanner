@@ -27,10 +27,10 @@ def highLevelPlanner(scenario, planning_problem, param):
     """decide on which lanelets to be at all points in time"""
 
     # extract required information from the planning problem
-    param, lanelets = initialization(scenario, planning_problem, param)
+    param, lanelets, speed_limit = initialization(scenario, planning_problem, param)
 
     # compute free space on each lanelet for each time step
-    free_space, partially_occupied = free_space_lanelet(lanelets, scenario.obstacles, param)
+    free_space, partially_occupied = free_space_lanelet(lanelets, scenario.obstacles, speed_limit, param)
 
     # compute distance to goal lanelet and number of required lane changes for each lanelet
     dist_goal, change_goal = distance2goal(lanelets, param)
@@ -139,7 +139,22 @@ def initialization(scenario, planning_problem, param):
     else:
         param['goal_set'] = interval2polygon([goal_space_start, param['v_min']], [goal_space_end, param['v_max']])
 
-    return param, lanelets
+    # determine the speed limit for each lanelet
+    speed_limit = {}
+
+    for id in lanelets.keys():
+        limits = []
+        for sign_id in lanelets[id].traffic_signs:
+            sign = scenario.lanelet_network.find_traffic_sign_by_id(sign_id)
+            for elem in sign.traffic_sign_elements:
+                if elem.traffic_sign_element_id.name == "MAX_SPEED":
+                    limits.append(float(elem.additional_values[0]))
+        if len(limits) > 0:
+            speed_limit[id] = min(limits)
+        else:
+            speed_limit[id] = None
+
+    return param, lanelets, speed_limit
 
 def get_shapely_object(set):
     """construct the shapely polygon object for the given CommonRoad set"""
@@ -277,15 +292,13 @@ def velocity_profile(dist, param):
 
     return vel
 
-def free_space_lanelet(lanelets, obstacles, param):
+def free_space_lanelet(lanelets, obstacles, speed_limit, param):
     """compute free space on each lanelet for all time steps"""
 
     free_space_all = []
     tmp = [deepcopy([[] for i in range(0, param['steps']+1)]) for j in range(len(lanelets))]
     occupied_space = dict(zip(lanelets.keys(), deepcopy(tmp)))
     partially_occupied = dict(zip(lanelets.keys(), deepcopy(tmp)))
-    v_max = param['v_max']
-    v_min = param['v_min']
 
     # loop over all lanelets and compute occupied space
     for id in lanelets.keys():
@@ -361,6 +374,13 @@ def free_space_lanelet(lanelets, obstacles, param):
     # unite occupied spaces that belong to the same time
     for id in lanelets.keys():
 
+        # set speed-limit for the lanelet
+        v_min = param['v_min']
+        if speed_limit[id] is None:
+            v_max = param['v_max']
+        else:
+            v_max = speed_limit[id]
+
         # compute width of the lanelet
         width_min, width_max = width_lanelet(lanelets[id])
 
@@ -425,6 +445,12 @@ def free_space_lanelet(lanelets, obstacles, param):
 
         l = lanelets[id]
         free_space = []
+
+        v_min = param['v_min']
+        if speed_limit[id] is None:
+            v_max = param['v_max']
+        else:
+            v_max = speed_limit[id]
 
         for o in occupied_space[id]:
 
