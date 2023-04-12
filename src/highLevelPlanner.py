@@ -15,13 +15,16 @@ W_LANE_CHANGE = 1000
 W_DIST = 1
 
 # safety distance to other cars
-DIST_SAFE = 0.2
+DIST_SAFE = 2
 
 # minimum number of consecutive time steps required to perform a lane change
 MIN_LANE_CHANGE = 2
 
 # desired number of time steps for performing a lane change
 DES_LANE_CHANGE = 20
+
+# desired acceleration
+A_DES = 1
 
 def highLevelPlanner(scenario, planning_problem, param):
     """decide on which lanelets to be at all points in time"""
@@ -36,7 +39,7 @@ def highLevelPlanner(scenario, planning_problem, param):
     dist_goal, change_goal = distance2goal(lanelets, param)
 
     # compute the desired velocity profile over time
-    vel_prof = velocity_profile(dist_goal, param)
+    vel_prof = velocity_profile(dist_goal, speed_limit, param)
 
     # compute the desired reference trajectory
     ref_traj = velocity2trajectory(vel_prof, param)
@@ -237,8 +240,15 @@ def distance2goal(lanelets, param):
 
     return dist, change
 
-def velocity_profile(dist, param):
+def velocity_profile(dist, speed_limit, param):
     """compute the desired velocity profile over time"""
+
+    # select desired velocity
+    vel_des = np.inf
+
+    for id in param['x0_lane']:
+        if not speed_limit[id] is None:
+            vel_des = min(vel_des, speed_limit[id])
 
     # calculate minimum and maximum velocity required at the end of the time horizon
     vel_min = param['goal_set'].bounds[1]
@@ -282,12 +292,13 @@ def velocity_profile(dist, param):
             vel_min = max(vel_min, vel_min_)
             vel_max = min(vel_max, vel_max_)
 
+    acc = max(-A_DES, min(A_DES, (vel_des - param['v_init'])/(param['time_step'] * param['steps'])))
+    vel = list(param['v_init'] + acc * param['time_step'] * np.arange(0, param['steps'] + 1))
+
     # calculate velocity profile
-    if vel_min <= param['v_init'] <= vel_max:
-        vel = [param['v_init'] for i in range(param['steps']+1)]
-    elif param['v_init'] < vel_min:
+    if vel[-1] < vel_min:
         vel = [param['v_init'] + (vel_min - param['v_init']) * t/param['steps'] for t in range(param['steps']+1)]
-    else:
+    elif vel[-1] > vel_max:
         vel = [param['v_init'] + (vel_max - param['v_init']) * t/param['steps'] for t in range(param['steps']+1)]
 
     return vel
