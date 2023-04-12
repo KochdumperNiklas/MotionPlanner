@@ -1,7 +1,7 @@
 import numpy as np
 import pickle
 from scipy.integrate import solve_ivp
-
+import os
 import sys
 sys.path.append('./')
 
@@ -47,9 +47,9 @@ while v_init < v_end:
 
                     # compute the required steering angle to achieve the desired final orientation
                     if o == 0:
-                    	steer = 0
+                        steer = 0
                     else:
-                    	steer = np.arctan(wb * o / (v_init * tFinal + 0.5*acc * tFinal**2))
+                        steer = np.arctan(wb * o / (v_init * tFinal + 0.5*acc * tFinal**2))
 
                     if abs(steer) < s_max:
 
@@ -70,6 +70,6 @@ while v_init < v_end:
 # construct and save maneuver automaton
 MA = ManeuverAutomaton(primitives, v_end, v_diff)
 
-filehandler = open('maneuverAutomaton.obj', 'wb')
+filehandler = open(os.path.join('maneuverAutomaton','maneuverAutomaton.obj'), 'wb')
 pickle.dump(MA, filehandler)
 
