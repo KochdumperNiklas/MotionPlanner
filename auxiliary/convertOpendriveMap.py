@@ -35,7 +35,7 @@ def remove_small_lanelets(scenario):
         if w < 1:
 
             # reassign lanelet ids from the left
-            if lanelets[id].adj_left is not None:
+            """if lanelets[id].adj_left is not None:
 
                 l = lanelets[lanelets[id].adj_left]
                 lanelets[lanelets[id].adj_left] = Lanelet(l.left_vertices, l.center_vertices, lanelets[id].center_vertices,
@@ -69,7 +69,7 @@ def remove_small_lanelets(scenario):
                                                       lanelet_type=l.lanelet_type, user_one_way=l.user_one_way,
                                                       user_bidirectional=l.user_bidirectional,
                                                       traffic_signs=l.traffic_signs,
-                                                      traffic_lights=l.traffic_lights)
+                                                      traffic_lights=l.traffic_lights)"""
 
             index.append(id)
 
@@ -77,6 +77,61 @@ def remove_small_lanelets(scenario):
         del lanelets[i]
 
     network = LaneletNetwork.create_from_lanelet_list(list(lanelets.values()), cleanup_ids=True)
+    scenario.replace_lanelet_network(network)
+
+    return scenario
+
+def remove_outer_lanelets(scenario):
+    """remove all lanelelts that do not have a left and right neighbor"""
+
+    # get list of lanelets
+    network = scenario.lanelet_network
+    lanelets = scenario.lanelet_network.lanelets
+
+    # loop over lanelets
+    for l in lanelets:
+
+        if l.adj_right is None or l.adj_left is None:
+            network.remove_lanelet(l.lanelet_id, rtree=True)
+
+    scenario.replace_lanelet_network(network)
+
+    return scenario
+
+def connect_successors(scenario):
+    """make sure successor lanelets start at the same vertices as the previous lanelet"""
+
+    # get list of lanelets
+    lanelets = scenario.lanelet_network.lanelets
+
+    # loop over lanelets
+    for i in range(len(lanelets)):
+
+        l = lanelets[i]
+
+        if len(l.successor) > 0:
+
+            l_ = scenario.lanelet_network.find_lanelet_by_id(l.successor[0])
+
+            if l.lanelet_id == 4 and l_.lanelet_id == 199:
+
+                left = l.left_vertices
+                right = l.right_vertices
+                center = l.center_vertices
+                left[-1, :] = l_.left_vertices[0, :]
+                right[-1, :] = l_.right_vertices[0, :]
+                center[-1, :] = l_.center_vertices[0, :]
+
+                lanelets[i] = Lanelet(left, center, right, l.lanelet_id,
+                                  predecessor=l.predecessor, successor=l.successor, adjacent_left=l.adj_left,
+                                  adjacent_left_same_direction=l.adj_left_same_direction, adjacent_right=l.adj_right,
+                                  adjacent_right_same_direction=l.adj_right_same_direction,
+                                  line_marking_left_vertices=l.line_marking_left_vertices,
+                                  line_marking_right_vertices=l.line_marking_right_vertices,
+                                  stop_line=l.stop_line, lanelet_type=l.lanelet_type, user_one_way=l.user_one_way,
+                                  user_bidirectional=l.user_bidirectional, traffic_signs=l.traffic_signs, traffic_lights=lanelets[0].traffic_lights)
+
+    network = LaneletNetwork.create_from_lanelet_list(lanelets, cleanup_ids=True)
     scenario.replace_lanelet_network(network)
 
     return scenario
@@ -98,6 +153,79 @@ def make_lanelets_valid(scenario):
                               line_marking_right_vertices=l.line_marking_right_vertices,
                               stop_line=l.stop_line, lanelet_type=l.lanelet_type, user_one_way=l.user_one_way,
                               user_bidirectional=l.user_bidirectional, traffic_signs=l.traffic_signs, traffic_lights=lanelets[0].traffic_lights)
+
+    network = LaneletNetwork.create_from_lanelet_list(lanelets, cleanup_ids=True)
+    scenario.replace_lanelet_network(network)
+
+    return scenario
+
+def remove_unreachable_lanelets(scenario, start):
+    """remove all lanelets that are not reachable from the given starting lanelet"""
+
+    # determine all reachable lanelets
+    queue = [start]
+    traversed = []
+
+    while len(queue) > 0:
+
+        id = queue.pop(0)
+        traversed.append(id)
+        l = scenario.lanelet_network.find_lanelet_by_id(id)
+
+        for s in l.successor:
+            if not s in traversed and not s in queue:
+                queue.append(s)
+
+        if not l.adj_left is None and l.adj_left_same_direction and not l.adj_left in traversed and not l.adj_left in queue:
+            queue.append(l.adj_left)
+
+        if not l.adj_right is None and l.adj_right_same_direction and not l.adj_right in traversed and not l.adj_right in queue:
+            queue.append(l.adj_right)
+
+    # remove all unreachable lanelets
+    lanelets = scenario.lanelet_network.lanelets
+
+    # loop over lanelets
+    lanelets_ = []
+    for l in lanelets:
+        if l.lanelet_id in traversed:
+            lanelets_.append(l)
+
+    network = LaneletNetwork.create_from_lanelet_list(lanelets_, cleanup_ids=True)
+    scenario.replace_lanelet_network(network)
+
+    return scenario
+
+def mirror_lanelets(scenario, index):
+    """mirror the coordinate given by index"""
+
+    # construct tranformation matrix
+    T = np.zeros((2, 2))
+    T[0, 0] = 1
+    T[1, 1] = 1
+    T[index, index] = -T[index, index]
+
+    # get list of lanelets
+    lanelets = scenario.lanelet_network.lanelets
+
+    # loop over lanelets
+    for j in range(len(lanelets)):
+
+        l = lanelets[j]
+
+        left = l.left_vertices @ T
+        right = l.right_vertices @ T
+        center = l.center_vertices @ T
+
+        lanelets[j] = Lanelet(right, center, left, l.lanelet_id,
+                              predecessor=l.predecessor, successor=l.successor, adjacent_left=l.adj_left,
+                              adjacent_left_same_direction=l.adj_left_same_direction, adjacent_right=l.adj_right,
+                              adjacent_right_same_direction=l.adj_right_same_direction,
+                              line_marking_left_vertices=l.line_marking_left_vertices,
+                              line_marking_right_vertices=l.line_marking_right_vertices,
+                              stop_line=l.stop_line, lanelet_type=l.lanelet_type, user_one_way=l.user_one_way,
+                              user_bidirectional=l.user_bidirectional, traffic_signs=l.traffic_signs,
+                              traffic_lights=lanelets[0].traffic_lights)
 
     network = LaneletNetwork.create_from_lanelet_list(lanelets, cleanup_ids=True)
     scenario.replace_lanelet_network(network)
@@ -167,13 +295,27 @@ if __name__ == "__main__":
     scenario = remove_small_lanelets(scenario)
 
     # reduce number of points used to represent the lanelet
-    scenario = simplify_lanelet_polygons(scenario, 0.01)
+    scenario = simplify_lanelet_polygons(scenario, 0.05)
+
+    # make sure all successors-predecessor pairs share a common point
+    scenario = connect_successors(scenario)
+
+    # remove outer lanelets
+    #scenario = remove_outer_lanelets(scenario)
+
+    # remove lanelets that are not reachable from the starting lanelet
+    scenario = remove_unreachable_lanelets(scenario, 2)
+
+    # mirror y coordinate
+    #scenario = mirror_lanelets(scenario, 1)
 
     # validate lanelet properties
-    scenario = make_lanelets_valid(scenario)
+    #scenario = make_lanelets_valid(scenario)
 
     # define planning problem
     lanelet = 196
+    lanelet = 1
+    lanelet = scenario.lanelet_network.find_lanelet_by_position([np.array([185, -195])])[0][0]
 
     for l in scenario.lanelet_network.lanelets:
         if l.lanelet_id == lanelet:
