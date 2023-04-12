@@ -31,7 +31,7 @@ class ManeuverAutomaton:
     def velocity2primitives(self, v):
         """determine all motion primitives starting at the current velocity"""
 
-        return self.vel_dic[np.floor(v/self.v_diff).astype(int)]
+        return self.vel_dic[np.round(v/self.v_diff).astype(int)]
 
 
 class MotionPrimitive:
