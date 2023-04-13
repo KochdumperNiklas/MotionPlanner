@@ -11,6 +11,7 @@ from commonroad.planning.goal import GoalRegion
 from commonroad.scenario.state import CustomState
 from commonroad.scenario.state import InitialState
 from commonroad.common.util import Interval
+from commonroad.scenario.traffic_sign import TrafficSign, TrafficSignElement, TrafficSignIDZamunda
 from commonroad.planning.planning_problem import PlanningProblem
 from commonroad.common.file_writer import CommonRoadFileWriter, OverwriteExistingFile
 from commonroad.planning.planning_problem import PlanningProblemSet
@@ -232,6 +233,20 @@ def mirror_lanelets(scenario, index):
 
     return scenario
 
+def add_speed_limit(scenario, limit):
+    """add a speed limit to all lanelets"""
+
+    # create traffic sign
+    elem = TrafficSignElement(TrafficSignIDZamunda.MAX_SPEED, [str(limit)])
+
+    # loop over all lanelets
+    for l in scenario.lanelet_network.lanelets:
+
+        ts = TrafficSign(scenario.generate_object_id(), [elem], l.lanelet_id)
+        scenario.lanelet_network.add_traffic_sign(ts, [l.lanelet_id])
+
+    return scenario
+
 def simplify_lanelet_polygons(scenario, tol):
     """reduce the number of points for the lanelet polygons"""
 
@@ -306,6 +321,9 @@ if __name__ == "__main__":
     # remove lanelets that are not reachable from the starting lanelet
     scenario = remove_unreachable_lanelets(scenario, 2)
 
+    # add speed limit
+    scenario = add_speed_limit(scenario, 8.3)
+
     # mirror y coordinate
     #scenario = mirror_lanelets(scenario, 1)
 
@@ -324,7 +342,7 @@ if __name__ == "__main__":
     #goal_state = CustomState(time_step=Interval(30, 30))
     #goal_region = GoalRegion([goal_state], lanelets_of_goal_position={0: [9]})
     goal_region = GoalRegion([goal_state], lanelets_of_goal_position=None)
-    initial_state = InitialState(position=np.array([396.5, -30]), velocity=10, orientation=np.pi/2, yaw_rate=0, slip_angle=0, time_step=0)
+    initial_state = InitialState(position=np.array([396.5, -30]), velocity=0, orientation=np.pi/2, yaw_rate=0, slip_angle=0, time_step=0)
     planning_problem = PlanningProblem(1, initial_state, goal_region)
 
     # store converted file as CommonRoad scenario

@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<commonRoad timeStepSize="0.1" commonRoadVersion="2020a" author="Sebastian Maierhofer" affiliation="Technical University of Munich" source="CommonRoad Scenario Designer" benchmarkID="ZAM_OpenDrive-1" date="2023-04-12">
+<commonRoad timeStepSize="0.1" commonRoadVersion="2020a" author="Sebastian Maierhofer" affiliation="Technical University of Munich" source="CommonRoad Scenario Designer" benchmarkID="ZAM_OpenDrive-1" date="2023-04-13">
   <location>
     <geoNameId>-999</geoNameId>
     <gpsLatitude>0.0</gpsLatitude>
@@ -45,8 +45,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="273"/>
   </lanelet>
   <lanelet id="5">
     <leftBound>
@@ -76,8 +77,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="274"/>
   </lanelet>
   <lanelet id="21">
     <leftBound>
@@ -109,8 +111,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="275"/>
   </lanelet>
   <lanelet id="25">
     <leftBound>
@@ -142,8 +145,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="276"/>
   </lanelet>
   <lanelet id="39">
     <leftBound>
@@ -174,8 +178,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="277"/>
   </lanelet>
   <lanelet id="43">
     <leftBound>
@@ -206,8 +211,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="278"/>
   </lanelet>
   <lanelet id="57">
     <leftBound>
@@ -237,8 +243,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="279"/>
   </lanelet>
   <lanelet id="60">
     <leftBound>
@@ -268,8 +275,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="280"/>
   </lanelet>
   <lanelet id="73">
     <leftBound>
@@ -301,8 +309,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="281"/>
   </lanelet>
   <lanelet id="78">
     <leftBound>
@@ -334,8 +343,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="282"/>
   </lanelet>
   <lanelet id="95">
     <leftBound>
@@ -365,8 +375,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="283"/>
   </lanelet>
   <lanelet id="98">
     <leftBound>
@@ -397,8 +408,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="284"/>
   </lanelet>
   <lanelet id="109">
     <leftBound>
@@ -430,8 +442,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="285"/>
   </lanelet>
   <lanelet id="113">
     <leftBound>
@@ -463,8 +476,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="286"/>
   </lanelet>
   <lanelet id="127">
     <leftBound>
@@ -495,8 +509,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="287"/>
   </lanelet>
   <lanelet id="129">
     <leftBound>
@@ -526,8 +541,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="288"/>
   </lanelet>
   <lanelet id="137">
     <leftBound>
@@ -558,8 +574,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="289"/>
   </lanelet>
   <lanelet id="142">
     <leftBound>
@@ -591,8 +608,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="290"/>
   </lanelet>
   <lanelet id="159">
     <leftBound>
@@ -624,8 +642,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="291"/>
   </lanelet>
   <lanelet id="163">
     <leftBound>
@@ -657,8 +676,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="292"/>
   </lanelet>
   <lanelet id="14">
     <leftBound>
@@ -799,8 +819,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="293"/>
   </lanelet>
   <lanelet id="177">
     <leftBound>
@@ -831,8 +852,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="294"/>
   </lanelet>
   <lanelet id="182">
     <leftBound>
@@ -863,8 +885,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="295"/>
   </lanelet>
   <lanelet id="59">
     <leftBound>
@@ -1037,8 +1060,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="296"/>
   </lanelet>
   <lanelet id="2">
     <leftBound>
@@ -1211,8 +1235,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="297"/>
   </lanelet>
   <lanelet id="199">
     <leftBound>
@@ -1243,8 +1268,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="298"/>
   </lanelet>
   <lanelet id="201">
     <leftBound>
@@ -1276,8 +1302,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="299"/>
   </lanelet>
   <lanelet id="209">
     <leftBound>
@@ -1309,8 +1336,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="300"/>
   </lanelet>
   <lanelet id="211">
     <leftBound>
@@ -1342,8 +1370,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="301"/>
   </lanelet>
   <lanelet id="219">
     <leftBound>
@@ -1375,8 +1404,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="302"/>
   </lanelet>
   <lanelet id="221">
     <leftBound>
@@ -1408,8 +1438,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="303"/>
   </lanelet>
   <lanelet id="229">
     <leftBound>
@@ -1441,8 +1472,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="304"/>
   </lanelet>
   <lanelet id="230">
     <leftBound>
@@ -1473,8 +1505,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="305"/>
   </lanelet>
   <lanelet id="65">
     <leftBound>
@@ -1615,8 +1648,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="306"/>
   </lanelet>
   <lanelet id="235">
     <leftBound>
@@ -1648,8 +1682,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="307"/>
   </lanelet>
   <lanelet id="237">
     <leftBound>
@@ -1681,8 +1716,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="308"/>
   </lanelet>
   <lanelet id="245">
     <leftBound>
@@ -1714,8 +1750,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="309"/>
   </lanelet>
   <lanelet id="247">
     <leftBound>
@@ -1747,8 +1784,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="310"/>
   </lanelet>
   <lanelet id="255">
     <leftBound>
@@ -1780,8 +1818,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="311"/>
   </lanelet>
   <lanelet id="257">
     <leftBound>
@@ -1812,8 +1851,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="312"/>
   </lanelet>
   <lanelet id="265">
     <leftBound>
@@ -1845,8 +1885,9 @@
     <laneletType>intersection</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="313"/>
   </lanelet>
   <lanelet id="266">
     <leftBound>
@@ -1877,8 +1918,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="314"/>
   </lanelet>
   <lanelet id="271">
     <leftBound>
@@ -1909,8 +1951,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="315"/>
   </lanelet>
   <lanelet id="272">
     <leftBound>
@@ -1941,8 +1984,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="316"/>
   </lanelet>
   <lanelet id="32">
     <leftBound>
@@ -2018,8 +2062,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="317"/>
   </lanelet>
   <lanelet id="22">
     <leftBound>
@@ -2127,8 +2172,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="318"/>
   </lanelet>
   <lanelet id="3">
     <leftBound>
@@ -2156,8 +2202,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="319"/>
   </lanelet>
   <lanelet id="12">
     <leftBound>
@@ -2185,8 +2232,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="320"/>
   </lanelet>
   <lanelet id="4">
     <leftBound>
@@ -2294,8 +2342,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="321"/>
   </lanelet>
   <lanelet id="13">
     <leftBound>
@@ -2379,8 +2428,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="322"/>
   </lanelet>
   <lanelet id="30">
     <leftBound>
@@ -2408,8 +2458,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="323"/>
   </lanelet>
   <lanelet id="23">
     <leftBound>
@@ -2437,8 +2488,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="324"/>
   </lanelet>
   <lanelet id="24">
     <leftBound>
@@ -2538,8 +2590,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="325"/>
   </lanelet>
   <lanelet id="31">
     <leftBound>
@@ -2623,8 +2676,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="326"/>
   </lanelet>
   <lanelet id="50">
     <leftBound>
@@ -2708,8 +2762,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="327"/>
   </lanelet>
   <lanelet id="40">
     <leftBound>
@@ -2817,8 +2872,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="328"/>
   </lanelet>
   <lanelet id="103">
     <leftBound>
@@ -2846,8 +2902,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="329"/>
   </lanelet>
   <lanelet id="96">
     <leftBound>
@@ -2875,8 +2932,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="330"/>
   </lanelet>
   <lanelet id="97">
     <leftBound>
@@ -2976,8 +3034,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="331"/>
   </lanelet>
   <lanelet id="104">
     <leftBound>
@@ -3061,8 +3120,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="332"/>
   </lanelet>
   <lanelet id="120">
     <leftBound>
@@ -3138,8 +3198,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="333"/>
   </lanelet>
   <lanelet id="110">
     <leftBound>
@@ -3231,8 +3292,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="334"/>
   </lanelet>
   <lanelet id="48">
     <leftBound>
@@ -3260,8 +3322,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="335"/>
   </lanelet>
   <lanelet id="41">
     <leftBound>
@@ -3289,8 +3352,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="336"/>
   </lanelet>
   <lanelet id="42">
     <leftBound>
@@ -3398,8 +3462,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="337"/>
   </lanelet>
   <lanelet id="49">
     <leftBound>
@@ -3475,8 +3540,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="338"/>
   </lanelet>
   <lanelet id="66">
     <leftBound>
@@ -3560,8 +3626,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="339"/>
   </lanelet>
   <lanelet id="58">
     <leftBound>
@@ -3677,8 +3744,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="340"/>
   </lanelet>
   <lanelet id="132">
     <leftBound>
@@ -3762,8 +3830,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="341"/>
   </lanelet>
   <lanelet id="128">
     <leftBound>
@@ -3863,8 +3932,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="342"/>
   </lanelet>
   <lanelet id="111">
     <leftBound>
@@ -3892,8 +3962,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="343"/>
   </lanelet>
   <lanelet id="118">
     <leftBound>
@@ -3921,8 +3992,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="344"/>
   </lanelet>
   <lanelet id="112">
     <leftBound>
@@ -4014,8 +4086,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="345"/>
   </lanelet>
   <lanelet id="119">
     <leftBound>
@@ -4099,8 +4172,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="346"/>
   </lanelet>
   <lanelet id="236">
     <leftBound>
@@ -4128,8 +4202,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="347"/>
   </lanelet>
   <lanelet id="242">
     <leftBound>
@@ -4157,8 +4232,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="348"/>
   </lanelet>
   <lanelet id="138">
     <leftBound>
@@ -4242,8 +4318,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="349"/>
   </lanelet>
   <lanelet id="151">
     <leftBound>
@@ -4335,8 +4412,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="350"/>
   </lanelet>
   <lanelet id="139">
     <leftBound>
@@ -4444,8 +4522,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="351"/>
   </lanelet>
   <lanelet id="152">
     <leftBound>
@@ -4529,8 +4608,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="352"/>
   </lanelet>
   <lanelet id="189">
     <leftBound>
@@ -4638,8 +4718,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="353"/>
   </lanelet>
   <lanelet id="180">
     <leftBound>
@@ -4723,8 +4804,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="354"/>
   </lanelet>
   <lanelet id="190">
     <leftBound>
@@ -4808,8 +4890,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="355"/>
   </lanelet>
   <lanelet id="181">
     <leftBound>
@@ -4909,8 +4992,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="356"/>
   </lanelet>
   <lanelet id="220">
     <leftBound>
@@ -4938,8 +5022,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="357"/>
   </lanelet>
   <lanelet id="224">
     <leftBound>
@@ -4967,8 +5052,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="358"/>
   </lanelet>
   <lanelet id="161">
     <leftBound>
@@ -5044,8 +5130,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="359"/>
   </lanelet>
   <lanelet id="168">
     <leftBound>
@@ -5145,8 +5232,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="360"/>
   </lanelet>
   <lanelet id="200">
     <leftBound>
@@ -5174,8 +5262,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="361"/>
   </lanelet>
   <lanelet id="204">
     <leftBound>
@@ -5203,8 +5292,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="362"/>
   </lanelet>
   <lanelet id="162">
     <leftBound>
@@ -5312,8 +5402,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="363"/>
   </lanelet>
   <lanelet id="169">
     <leftBound>
@@ -5397,8 +5488,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="364"/>
   </lanelet>
   <lanelet id="178">
     <leftBound>
@@ -5482,8 +5574,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="365"/>
   </lanelet>
   <lanelet id="191">
     <leftBound>
@@ -5583,8 +5676,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="366"/>
   </lanelet>
   <lanelet id="256">
     <leftBound>
@@ -5612,8 +5706,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="367"/>
   </lanelet>
   <lanelet id="262">
     <leftBound>
@@ -5641,8 +5736,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="368"/>
   </lanelet>
   <lanelet id="192">
     <leftBound>
@@ -5726,8 +5822,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="369"/>
   </lanelet>
   <lanelet id="179">
     <leftBound>
@@ -5819,8 +5916,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="370"/>
   </lanelet>
   <lanelet id="85">
     <leftBound>
@@ -5904,8 +6002,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="371"/>
   </lanelet>
   <lanelet id="76">
     <leftBound>
@@ -6005,8 +6104,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="372"/>
   </lanelet>
   <lanelet id="214">
     <leftBound>
@@ -6034,8 +6134,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="373"/>
   </lanelet>
   <lanelet id="210">
     <leftBound>
@@ -6063,8 +6164,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="374"/>
   </lanelet>
   <lanelet id="77">
     <leftBound>
@@ -6148,8 +6250,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="375"/>
   </lanelet>
   <lanelet id="86">
     <leftBound>
@@ -6249,8 +6352,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="376"/>
   </lanelet>
   <lanelet id="87">
     <leftBound>
@@ -6334,8 +6438,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="377"/>
   </lanelet>
   <lanelet id="74">
     <leftBound>
@@ -6435,8 +6540,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="378"/>
   </lanelet>
   <lanelet id="88">
     <leftBound>
@@ -6544,8 +6650,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="379"/>
   </lanelet>
   <lanelet id="75">
     <leftBound>
@@ -6629,8 +6736,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="380"/>
   </lanelet>
   <lanelet id="252">
     <leftBound>
@@ -6658,8 +6766,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="381"/>
   </lanelet>
   <lanelet id="246">
     <leftBound>
@@ -6687,8 +6796,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="382"/>
   </lanelet>
   <lanelet id="149">
     <leftBound>
@@ -6764,8 +6874,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="383"/>
   </lanelet>
   <lanelet id="140">
     <leftBound>
@@ -6873,8 +6984,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="384"/>
   </lanelet>
   <lanelet id="160">
     <leftBound>
@@ -6974,8 +7086,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="385"/>
   </lanelet>
   <lanelet id="170">
     <leftBound>
@@ -7059,8 +7172,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="386"/>
   </lanelet>
   <lanelet id="150">
     <leftBound>
@@ -7088,8 +7202,9 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="387"/>
   </lanelet>
   <lanelet id="141">
     <leftBound>
@@ -7117,9 +7232,822 @@
     <laneletType>urban</laneletType>
     <userOneWay>train</userOneWay>
     <userOneWay>vehicle</userOneWay>
-    <userOneWay>pedestrian</userOneWay>
     <userOneWay>bicycle</userOneWay>
+    <userOneWay>pedestrian</userOneWay>
+    <trafficSignRef ref="388"/>
   </lanelet>
+  <trafficSign id="273">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="274">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="275">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="276">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="277">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="278">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="279">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="280">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="281">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="282">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="283">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="284">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="285">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="286">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="287">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="288">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="289">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="290">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="291">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="292">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="293">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="294">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="295">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="296">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="297">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="298">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="299">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="300">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="301">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="302">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="303">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="304">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="305">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="306">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="307">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="308">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="309">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="310">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="311">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="312">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="313">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="314">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="315">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="316">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="317">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="318">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="319">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="320">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="321">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="322">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="323">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="324">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="325">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="326">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="327">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="328">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="329">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="330">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="331">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="332">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="333">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="334">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="335">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="336">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="337">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="338">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="339">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="340">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="341">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="342">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="343">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="344">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="345">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="346">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="347">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="348">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="349">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="350">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="351">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="352">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="353">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="354">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="355">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="356">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="357">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="358">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="359">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="360">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="361">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="362">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="363">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="364">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="365">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="366">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="367">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="368">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="369">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="370">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="371">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="372">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="373">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="374">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="375">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="376">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="377">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="378">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="379">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="380">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="381">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="382">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="383">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="384">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="385">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="386">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="387">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="388">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>8.3</additionalValue>
+    </trafficSignElement>
+    <virtual>false</virtual>
+  </trafficSign>
   <planningProblem id="1">
     <initialState>
       <time>
@@ -7135,7 +8063,7 @@
         <exact>1.5707</exact>
       </orientation>
       <velocity>
-        <exact>10.0</exact>
+        <exact>0.0</exact>
       </velocity>
       <yawRate>
         <exact>0.0</exact>
