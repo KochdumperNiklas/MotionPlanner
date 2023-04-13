@@ -69,33 +69,37 @@ state = planning_problem.initial_state
 x0 = np.concatenate((state.position, np.array([state.velocity, state.orientation])))
 #x0 = np.concatenate((state.position, np.array([5, state.orientation])))
 lanelet = route.list_ids_lanelets[0]
-cnt_goal = 0
 cnt_init = 0
 plt.figure(figsize=(25, 10))
 
 # loop until car arrived at destination
 while lanelet != route.list_ids_lanelets[-1]:
 
-    # select goal set
-    lane_goal = scenario.lanelet_network.find_lanelet_by_id(route.list_ids_lanelets[cnt_goal])
-    point = 0.5*(lane_goal.left_vertices[-1, :] + lane_goal.right_vertices[-1, :])
-    d = np.sqrt((x0[0] - point[0])**2 + (x0[1] - point[1])**2)
-    #print(d)
-    #if x0[2] * HORIZON * scenario.dt > 1.8*d:
-    if d < 15:
-        cnt_goal = cnt_goal + 1
-
     # predict future positions of the surrounding traffic participants
     vehicles = [{'width': 2, 'length': 5, 'x': 380, 'y': -2, 'velocity': 10, 'orientation': 0}]
     vehicles.append({'width': 2, 'length': 5, 'x': 320, 'y': -2, 'velocity': 10, 'orientation': 0})
+    #vehicles.append({'width': 2, 'length': 5, 'x': 396.5, 'y': -10, 'velocity': 0, 'orientation': np.pi / 2})
 
     scenario_ = prediction(vehicles, deepcopy(scenario), HORIZON)
 
     # create motion planning problem
-    goal_id = route.list_ids_lanelets[cnt_goal]
-    goal_lane = scenario.lanelet_network.find_lanelet_by_id(route.list_ids_lanelets[cnt_goal])
-    goal_state = CustomState(time_step=Interval(HORIZON, HORIZON), position=goal_lane.polygon)
-    goal_region = GoalRegion([goal_state], lanelets_of_goal_position={0: [goal_id]})
+    goal_states = []
+    lanelets_of_goal_position = {}
+
+    dist_max = x0[2] * scenario.dt * HORIZON + 0.5 * param['a_max'] * (scenario.dt * HORIZON)**2
+    dist = 0
+
+    for i in range(cnt_init, len(route.list_ids_lanelets)):
+        goal_id = route.list_ids_lanelets[i]
+        goal_lane = scenario.lanelet_network.find_lanelet_by_id(goal_id)
+        goal_states.append(CustomState(time_step=Interval(HORIZON, HORIZON), position=goal_lane.polygon))
+        lanelets_of_goal_position[len(goal_states)-1] = [goal_id]
+        if i > cnt_init:
+            dist = dist + goal_lane.distance[-1]
+        if dist > dist_max:
+            break
+
+    goal_region = GoalRegion(goal_states, lanelets_of_goal_position=lanelets_of_goal_position)
     initial_state = InitialState(position=x0[0:2], velocity=x0[2], orientation=x0[3], yaw_rate=0, slip_angle=0, time_step=0)
     planning_problem = PlanningProblemSet([PlanningProblem(1, initial_state, goal_region)])
 
@@ -110,9 +114,6 @@ while lanelet != route.list_ids_lanelets[-1]:
 
         rnd.draw_params.time_begin = i
         rnd.draw_params.time_end = HORIZON
-        """rnd.draw_params.initial_state.time_begin = HORIZON
-        rnd.draw_params.initial_state.state.facecolor = None
-        rnd.draw_params.initial_state.state = None"""
         rnd.draw_params.planning_problem_set.planning_problem.initial_state.state.draw_arrow = False
         rnd.draw_params.planning_problem_set.planning_problem.initial_state.state.radius = 0
         scenario.draw(rnd)
