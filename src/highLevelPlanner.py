@@ -1070,7 +1070,7 @@ def space_lane_changes(space, plan, lanelets, free_space, partially_occupied, pa
     space_glob = lanelet2global(space, plan, lanelets)
 
     # add space from left and right lanelet for the beginning since the initial position is not necessarily in lanelet
-    for i in range(10):
+    for i in range(min(10, len(plan))):
 
         for f in free_space[plan[i]][i]:
             if f.intersects(space[i]):
