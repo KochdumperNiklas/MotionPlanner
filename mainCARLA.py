@@ -39,10 +39,12 @@ from commonroad.planning.goal import GoalRegion
 from commonroad.scenario.state import CustomState
 from commonroad.scenario.state import InitialState
 from commonroad.common.util import Interval
+from commonroad.scenario.traffic_sign import TrafficLight, TrafficLightCycleElement, TrafficLightState
 from commonroad.planning.planning_problem import PlanningProblem
 from commonroad.planning.planning_problem import PlanningProblemSet
 from commonroad_route_planner.route_planner import RoutePlanner
 from commonroad_route_planner.utility.visualization import visualize_route
+from commonroad.visualization.util import collect_center_line_colors
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -156,7 +158,6 @@ def main():
     x0 = np.concatenate((state.position, np.array([state.velocity, state.orientation])))
     start_pose = Transform(Location(x=x0[0], y=-x0[1], z=0.3), Rotation(pitch=0.0, yaw=-np.rad2deg(x0[3]), roll=0.0))
     lanelet = route.list_ids_lanelets[0]
-    cnt_goal = 0
     cnt_init = 0
     cnt_time = REPLAN
 
@@ -165,7 +166,7 @@ def main():
     spawn_points = world.get_map().get_spawn_points()
     for i in range(0, 50):
         point = random.choice(spawn_points)
-        if (point.location.x - x0[0])**2 + (point.location.y + x0[1])**2 > 10**2:
+        if (point.location.x - x0[0])**2 + (-point.location.y - x0[1])**2 > 10**2:
             world.try_spawn_actor(random.choice(vehicle_blueprints), point)
     for vehicle in world.get_actors().filter('*vehicle*'):
         vehicle.set_autopilot(True)
@@ -206,8 +207,8 @@ def main():
                     vehicles = []
                     for v in world.get_actors().filter('*vehicle*'):
                         transform = v.get_transform()
-                        if (transform.location.x - x0[0])**2 + (transform.location.y + x0[1])**2 < SENSORRANGE**2 and \
-                            (transform.location.x - x0[0]) ** 2 + (transform.location.y + x0[1]) ** 2 > 0.1:
+                        if (transform.location.x - x0[0])**2 + (-transform.location.y - x0[1])**2 < SENSORRANGE**2 and \
+                            (transform.location.x - x0[0]) ** 2 + (-transform.location.y - x0[1]) ** 2 > 0.1:
                             orientation = np.deg2rad(transform.rotation.yaw)
                             velocity = v.get_velocity()
                             velocity = np.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
@@ -219,6 +220,18 @@ def main():
 
                     scenario_ = prediction(vehicles, deepcopy(scenario), HORIZON)
 
+                    # consider red traffic lights
+                    if vehicle.is_at_traffic_light():
+                        traffic_light = vehicle.get_traffic_light()
+                        points = []
+                        for wp in traffic_light.get_affected_lane_waypoints():
+                            points.append(np.array([wp.Transform.location.x, -wp.Transform.location.y]))
+                        lanes = scenario.lanelet_network.find_lanelet_by_position(points)
+                        lanes = list(np.unique(np.asarray(lanes)))
+                        cycle = TrafficLightCycleElement(TrafficLightState('red'), HORIZON * scenario.dt)
+                        traffic_light = TrafficLight(scenario_.generate_object_id(), [cycle])
+                        _ = scenario_.lanelet_network.add_traffic_light(traffic_light, lanes)
+
                     # get lanelet for the current state
                     lane = scenario.lanelet_network.find_lanelet_by_id(lanelet)
                     if not lane.polygon.shapely_object.contains(Point(x0[0], x0[1])):
@@ -228,21 +241,28 @@ def main():
                                 cnt_init = i
                                 lanelet = l.lanelet_id
 
-                    # select goal set
-                    lane_goal = scenario.lanelet_network.find_lanelet_by_id(route.list_ids_lanelets[cnt_goal])
-                    point = 0.5 * (lane_goal.left_vertices[-1, :] + lane_goal.right_vertices[-1, :])
-                    d = np.sqrt((x0[0] - point[0]) ** 2 + (x0[1] - point[1]) ** 2)
-                    if d < 15:
-                        cnt_goal = cnt_goal + 1
+                        # create motion planning problem
+                        goal_states = []
+                        lanelets_of_goal_position = {}
 
-                    # create motion planning problem
-                    goal_id = route.list_ids_lanelets[cnt_goal]
-                    goal_lane = scenario.lanelet_network.find_lanelet_by_id(route.list_ids_lanelets[cnt_goal])
-                    goal_state = CustomState(time_step=Interval(HORIZON, HORIZON), position=goal_lane.polygon)
-                    goal_region = GoalRegion([goal_state], lanelets_of_goal_position={0: [goal_id]})
-                    initial_state = InitialState(position=x0[0:2], velocity=x0[2], orientation=x0[3], yaw_rate=0,
-                                                 slip_angle=0, time_step=0)
-                    planning_problem = PlanningProblemSet([PlanningProblem(1, initial_state, goal_region)])
+                        dist_max = x0[2] * scenario.dt * HORIZON + 0.5 * param['a_max'] * (scenario.dt * HORIZON) ** 2
+                        dist = 0
+
+                        for i in range(cnt_init, len(route.list_ids_lanelets)):
+                            goal_id = route.list_ids_lanelets[i]
+                            goal_lane = scenario.lanelet_network.find_lanelet_by_id(goal_id)
+                            goal_states.append(
+                                CustomState(time_step=Interval(HORIZON, HORIZON), position=goal_lane.polygon))
+                            lanelets_of_goal_position[len(goal_states) - 1] = [goal_id]
+                            if i > cnt_init:
+                                dist = dist + goal_lane.distance[-1]
+                            if dist > dist_max:
+                                break
+
+                        goal_region = GoalRegion(goal_states, lanelets_of_goal_position=lanelets_of_goal_position)
+                        initial_state = InitialState(position=x0[0:2], velocity=x0[2], orientation=x0[3], yaw_rate=0,
+                                                     slip_angle=0, time_step=0)
+                        planning_problem = PlanningProblemSet([PlanningProblem(1, initial_state, goal_region)])
 
                     # solve motion planning problem
                     plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param)
@@ -272,6 +292,20 @@ def main():
                     scenario.draw(rnd)
                     planning_problem.draw(rnd)
 
+                    # plot traffic lights
+                    if len(scenario_.lanelet_network.traffic_lights) > 0:
+                        status = collect_center_line_colors(scenario_.lanelet_network,
+                                                            scenario_.lanelet_network.traffic_lights, 0)
+                        settings = ShapeParams(opacity=1, edgecolor="k", linewidth=0.0, facecolor='r')
+                        for l in status.keys():
+                            lane = scenario_.lanelet_network.find_lanelet_by_id(l)
+                            for j in range(len(lane.distance) - 1):
+                                center = 0.5 * (lane.center_vertices[j, :] + lane.center_vertices[j + 1, :])
+                                d = lane.center_vertices[j + 1, :] - lane.center_vertices[j, :]
+                                r = Rectangle(length=np.linalg.norm(d), width=0.6, center=center,
+                                              orientation=np.arctan2(d[1], d[0]))
+                                r.draw(rnd, settings)
+
                     # plot prediction for the other vehicles
                     for d in scenario_.dynamic_obstacles:
                         for j in range(len(d.prediction.trajectory.state_list), 0, -1):
@@ -292,9 +326,9 @@ def main():
                     for j in range(x.shape[1] - 1, -1, -1):
                         if j >= cnt_time:
                             if j == cnt_time:
-                                settings = ShapeParams(opacity=1, edgecolor="k", linewidth=1.0, facecolor='r')
+                                settings = ShapeParams(opacity=1, edgecolor="k", linewidth=1.0, facecolor='#d95558')
                             else:
-                                settings = ShapeParams(opacity=0.2, edgecolor="k", linewidth=0.0, facecolor='r')
+                                settings = ShapeParams(opacity=0.2, edgecolor="k", linewidth=0.0, facecolor='#d95558')
                             r = Rectangle(length=param['length'], width=param['width'],
                                           center=np.array([x[0, j], x[1, j]]),
                                           orientation=x[3, j])
