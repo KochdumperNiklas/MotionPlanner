@@ -37,7 +37,7 @@ def highLevelPlanner(scenario, planning_problem, param):
     free_space, partially_occupied = free_space_lanelet(lanelets, scenario.obstacles, speed_limit, param)
 
     # compute distance to goal lanelet and number of required lane changes for each lanelet
-    dist_goal, change_goal = distance2goal(lanelets, param)
+    change_goal, dist_goal = distance2goal(lanelets, param)
 
     # compute the desired velocity profile over time
     vel_prof = velocity_profile(dist_goal, speed_limit, param)
@@ -219,8 +219,8 @@ def distance2goal(lanelets, param):
     for l in lanelets.keys():
         default[l] = np.inf
 
-    dist_all = deepcopy(default)
     change_all = deepcopy(default)
+    dist_all = []
 
     # loop over all goal sets
     for goal in param['goal']:
@@ -278,10 +278,11 @@ def distance2goal(lanelets, param):
 
         # combine with values for other goal sets
         for l in lanelets.keys():
-            dist_all[l] = min(dist_all[l], dist[l])
             change_all[l] = min(change_all[l], change[l])
 
-    return dist_all, change_all
+        dist_all.append(deepcopy(dist))
+
+    return change_all, dist_all
 
 def velocity_profile(dist, speed_limit, param):
     """compute the desired velocity profile over time"""
@@ -304,15 +305,18 @@ def velocity_profile(dist, speed_limit, param):
     val = np.inf
 
     for i in range(len(param['x0_lane'])):
-        for goal in param['goal']:
+        for j in range(len(param['goal'])):
+
+            goal = param['goal'][j]
 
             # compute velocity profile
-            vel_ = velocity_profile_single(dist, vel_des, i, goal, param)
+            vel_ = velocity_profile_single(dist[j], vel_des, i, goal, param)
 
             # select best velocity profile (= minimum distance to desired velocity)
             val_ = abs(vel_[-1] - vel_des)
             if val_ < val:
                 vel = deepcopy(vel_)
+                val = val_
 
     return vel
 
