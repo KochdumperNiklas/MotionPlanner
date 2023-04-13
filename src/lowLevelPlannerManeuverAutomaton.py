@@ -83,7 +83,14 @@ def collision_check(node, primitive, space, vel, param):
     # check if the maximum time is exceeded
     ind = node.x.shape[1] - primitive.x.shape[1]
 
-    if ind > param['goal_time_end']:
+    time_exceeded = True
+
+    for goal in param['goal']:
+        if ind <= goal['time_end']:
+            time_exceeded = False
+            break
+
+    if time_exceeded:
         return False
 
     # check if the final velocity is inside the valid range
@@ -118,10 +125,11 @@ def goal_check(node, primitive, param):
 
     # loop over all time steps
     for i in range(ind, node.x.shape[1]):
-        if param['goal_time_start'] <= i <= param['goal_time_end']:
-            p = Point(node.x[0, i], node.x[1, i])
-            if param['goal_space'] is None or param['goal_space'].contains(p):
-                return True, i
+        for goal in param['goal']:
+            if goal['time_start'] <= i <= goal['time_end']:
+                p = Point(node.x[0, i], node.x[1, i])
+                if goal['space'] is None or goal['space'].contains(p):
+                    return True, i
 
     return False, None
 
@@ -156,8 +164,9 @@ def plot_trajectory(node, scenario, plan, ref_traj, param):
             plt.plot(*l.polygon.shapely_object.exterior.xy, 'b')
 
     # plot goal set
-    if param['goal_space'] is not None:
-        plt.plot(*param['goal_space'].exterior.xy, 'g')
+    for goal in param['goal']:
+        if goal['space'] is not None:
+            plt.plot(*goal['space'].exterior.xy, 'g')
 
     # plot reference trajectory
     plt.plot(ref_traj[0, :], ref_traj[1, :], 'k')

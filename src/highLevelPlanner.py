@@ -9,6 +9,7 @@ from shapely.affinity import translate
 from shapely.ops import nearest_points
 from copy import deepcopy
 from commonroad.scenario.obstacle import StaticObstacle
+from commonroad.geometry.shape import ShapeGroup
 
 # weighting factors for the cost function
 W_LANE_CHANGE = 1000
@@ -106,41 +107,62 @@ def initialization(scenario, planning_problem, param):
     param['orientation'] = planning_problem.initial_state.orientation
 
     # extract parameter for the goal set
-    param['goal_time_start'] = planning_problem.goal.state_list[0].time_step.start
-    param['goal_time_end'] = planning_problem.goal.state_list[0].time_step.end
+    param['goal'] = []
 
-    if hasattr(planning_problem.goal.state_list[0], 'position'):
+    for i in range(len(planning_problem.goal.state_list)):
 
-        set = get_shapely_object(planning_problem.goal.state_list[0].position)
-        param['goal_space'] = set
+        goal_state = planning_problem.goal.state_list[i]
+        param_ = {}
+        shapes = 1
 
-        if planning_problem.goal.lanelets_of_goal_position is None:
-            for id in lanelets.keys():
-                if lanelets[id].polygon.shapely_object.intersects(set):
-                    param['goal_lane'] = id
-        else:
-            param['goal_lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[0][0]
+        if hasattr(goal_state, 'position') and isinstance(goal_state.position, ShapeGroup):
+            shapes = len(goal_state.position.shapes)
+        elif not planning_problem.goal.lanelets_of_goal_position is None:
+            shapes = len(list(planning_problem.goal.lanelets_of_goal_position.values())[i])
 
-        goal_space_start, goal_space_end, _, _ = projection_lanelet_centerline(lanelets[param['goal_lane']], set)
+        for j in range(shapes):
 
-    else:
+            param_['time_start'] = goal_state.time_step.start
+            param_['time_end'] = goal_state.time_step.end
 
-        if planning_problem.goal.lanelets_of_goal_position is None:
-            param['goal_lane'] = None
-            param['goal_space'] = None
-            goal_space_start = -100000
-            goal_space_end = 100000
-        else:
-            param['goal_lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[0][0]
-            l = lanelets[param['goal_lane']]
-            param['goal_space'] = l.polygon.shapely_object
-            goal_space_start, goal_space_end, _, _ = projection_lanelet_centerline(l, l.polygon.shapely_object)
+            if hasattr(goal_state, 'position'):
 
-    if hasattr(planning_problem.goal.state_list[0], 'velocity'):
-        v = planning_problem.goal.state_list[0].velocity
-        param['goal_set'] = interval2polygon([goal_space_start, v.start], [goal_space_end, v.end])
-    else:
-        param['goal_set'] = interval2polygon([goal_space_start, param['v_min']], [goal_space_end, param['v_max']])
+                if isinstance(goal_state.position, ShapeGroup):
+                    set = get_shapely_object(goal_state.position.shapes[j])
+                else:
+                    set = get_shapely_object(goal_state.position)
+
+                param_['space'] = set
+
+                if planning_problem.goal.lanelets_of_goal_position is None:
+                    for id in lanelets.keys():
+                        if lanelets[id].polygon.shapely_object.intersects(set):
+                            param_['lane'] = id
+                else:
+                    param_['lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[i][j]
+
+                goal_space_start, goal_space_end, _, _ = projection_lanelet_centerline(lanelets[param_['lane']], set)
+
+            else:
+
+                if planning_problem.goal.lanelets_of_goal_position is None:
+                    param_['lane'] = None
+                    param_['space'] = None
+                    goal_space_start = -100000
+                    goal_space_end = 100000
+                else:
+                    param_['lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[i][j]
+                    l = lanelets[param_['lane']]
+                    param_['space'] = l.polygon.shapely_object
+                    goal_space_start, goal_space_end, _, _ = projection_lanelet_centerline(l, l.polygon.shapely_object)
+
+            if hasattr(goal_state, 'velocity'):
+                v = goal_state.velocity
+                param_['set'] = interval2polygon([goal_space_start, v.start], [goal_space_end, v.end])
+            else:
+                param_['set'] = interval2polygon([goal_space_start, param['v_min']], [goal_space_end, param['v_max']])
+
+            param['goal'].append(deepcopy(param_))
 
     # determine the speed limit for each lanelet
     speed_limit = {}
@@ -192,53 +214,74 @@ def intersects_lanelet(lanelet, pgon):
 def distance2goal(lanelets, param):
     """compute the distance to the target lanelet for each lanelet"""
 
-    # catch the case where no goal lane is provided
-    if param['goal_lane'] is None:
-        default = {}
-        for l in lanelets.keys():
-            default[l] = 0
-        return default, default
-
-    # initialize distance to goal lanelet
-    dist = {param['goal_lane']: 0}
-    change = {param['goal_lane']: 0}
-
-    # initialize queue with goal lanelet
-    queue = []
-    queue.append(param['goal_lane'])
-
-    # loop until distances for all lanelets have been assigned
-    while len(queue) > 0:
-
-        q = queue.pop(0)
-        lanelet = lanelets[q]
-
-        for s in lanelet.predecessor:
-            if not s in dist.keys():
-                lanelet_ = lanelets[s]
-                change[s] = change[q]
-                dist[s] = dist[q] + lanelet_.distance[len(lanelet_.distance)-1]
-                queue.append(s)
-
-        if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
-            if not lanelet.adj_left in dist.keys():
-                change[lanelet.adj_left] = change[q] + 1
-                dist[lanelet.adj_left] = dist[q]
-                queue.append(lanelet.adj_left)
-
-        if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
-            if not lanelet.adj_right in dist.keys():
-                change[lanelet.adj_right] = change[q] + 1
-                dist[lanelet.adj_right] = dist[q]
-                queue.append(lanelet.adj_right)
-
-    # add costs for lanelet from which it is impossible to reach the goal set
+    # initialize dictionaries
+    default = {}
     for l in lanelets.keys():
-        if l not in dist.keys():
-            dist[l] = np.inf
-            change[l] = np.inf
+        default[l] = np.inf
 
-    return dist, change
+    dist_all = deepcopy(default)
+    change_all = deepcopy(default)
+
+    # loop over all goal sets
+    for goal in param['goal']:
+
+        # catch the case where no goal lane is provided
+        if goal['lane'] is None:
+
+            default = {}
+            for l in lanelets.keys():
+                default[l] = 0
+
+            dist = deepcopy(default)
+            change = deepcopy(default)
+
+        else:
+
+            # initialize distance to goal lanelet
+            dist = {goal['lane']: 0}
+            change = {goal['lane']: 0}
+
+            # initialize queue with goal lanelet
+            queue = []
+            queue.append(goal['lane'])
+
+            # loop until distances for all lanelets have been assigned
+            while len(queue) > 0:
+
+                q = queue.pop(0)
+                lanelet = lanelets[q]
+
+                for s in lanelet.predecessor:
+                    if not s in dist.keys():
+                        lanelet_ = lanelets[s]
+                        change[s] = change[q]
+                        dist[s] = dist[q] + lanelet_.distance[len(lanelet_.distance)-1]
+                        queue.append(s)
+
+                if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
+                    if not lanelet.adj_left in dist.keys():
+                        change[lanelet.adj_left] = change[q] + 1
+                        dist[lanelet.adj_left] = dist[q]
+                        queue.append(lanelet.adj_left)
+
+                if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
+                    if not lanelet.adj_right in dist.keys():
+                        change[lanelet.adj_right] = change[q] + 1
+                        dist[lanelet.adj_right] = dist[q]
+                        queue.append(lanelet.adj_right)
+
+            # add costs for lanelet from which it is impossible to reach the goal set
+            for l in lanelets.keys():
+                if l not in dist.keys():
+                    dist[l] = np.inf
+                    change[l] = np.inf
+
+        # combine with values for other goal sets
+        for l in lanelets.keys():
+            dist_all[l] = min(dist_all[l], dist[l])
+            change_all[l] = min(change_all[l], change[l])
+
+    return dist_all, change_all
 
 def velocity_profile(dist, speed_limit, param):
     """compute the desired velocity profile over time"""
@@ -250,37 +293,56 @@ def velocity_profile(dist, speed_limit, param):
         if not speed_limit[id] is None:
             vel_des = min(vel_des, speed_limit[id])
 
+    for goal in param['goal']:
+        if goal['lane'] is not None and speed_limit[goal['lane']] is not None:
+            vel_des = min(vel_des, speed_limit[goal['lane']])
+
+    if vel_des == np.inf:
+        vel_des = param['v_init']
+
+    # loop over all possible combinations of initial sets and goal sets
+    val = np.inf
+
+    for i in range(len(param['x0_lane'])):
+        for goal in param['goal']:
+
+            # compute velocity profile
+            vel_ = velocity_profile_single(dist, vel_des, i, goal, param)
+
+            # select best velocity profile (= minimum distance to desired velocity)
+            val_ = abs(vel_[-1] - vel_des)
+            if val_ < val:
+                vel = deepcopy(vel_)
+
+    return vel
+
+def velocity_profile_single(dist, vel_des, x0_ind, goal, param):
+    """compute the desired velocity profile for a single combination of inital and goal set"""
+
     # calculate minimum and maximum velocity required at the end of the time horizon
-    vel_min = param['goal_set'].bounds[1]
-    vel_max = param['goal_set'].bounds[3]
+    vel_min = goal['set'].bounds[1]
+    vel_max = goal['set'].bounds[3]
 
-    if param['goal_lane'] is not None:
-
-        # determine initial lanelet with the minimum distance to the goal
-        ind = 0
-
-        for i in range(1, len(param['x0_lane'])):
-            if dist[param['x0_lane'][i]] < dist[param['x0_lane'][ind]]:
-                ind = i
+    if goal['lane'] is not None:
 
         # calculate minimum and maximum distance from initial state to goal set
-        dist_min = dist[param['x0_lane'][ind]] - param['x0_set'][ind] + param['goal_set'].bounds[0]
-        dist_max = dist[param['x0_lane'][ind]] - param['x0_set'][ind] + param['goal_set'].bounds[2]
+        dist_min = dist[param['x0_lane'][x0_ind]] - param['x0_set'][x0_ind] + goal['set'].bounds[0]
+        dist_max = dist[param['x0_lane'][x0_ind]] - param['x0_set'][x0_ind] + goal['set'].bounds[2]
 
         # calculate minimum and maximum final velocities required to reach the goal set using a linear velocity profile
-        vel_min_ = 2*dist_min/(param['goal_time_end']*param['time_step']) - param['v_init']
-        vel_max_ = 2*dist_max/(param['goal_time_start']*param['time_step']) - param['v_init']
+        vel_min_ = 2*dist_min/(goal['time_end']*param['time_step']) - param['v_init']
+        vel_max_ = 2*dist_max/(goal['time_start']*param['time_step']) - param['v_init']
 
         # use a quadratic velocity profile if a linear one is not sufficient
         if vel_min_ > vel_max or vel_max_ < vel_min:
             if vel_max_ < vel_min:
                 vel_final = vel_min
                 x_final = dist_max
-                t_final = param['goal_time_start']
+                t_final = goal['time_start']
             else:
                 vel_final = vel_min
                 x_final = dist_min
-                t_final = param['goal_time_end']
+                t_final = goal['time_end']
 
             b = -5.0/6.0 * (x_final - 0.5*t_final*(param['v_init'] + vel_final))/t_final**3
             a = (vel_final - param['v_init'] - b * t_final ** 2)/t_final
@@ -627,20 +689,21 @@ def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, partially
                                                                  partially_occupied, param)
 
         # check if goal set has been reached
-        if param['goal_lane'] is None or lanelet.lanelet_id == param['goal_lane']:
+        for goal in param['goal']:
 
-            final_sets = []
+            if goal['lane'] is None or lanelet.lanelet_id == goal['lane']:
 
-            for d in drive_area:
-                if param['goal_time_start'] <= d['step'] <= param['goal_time_end'] and \
-                                                            d['space'].intersects(param['goal_set']):
-                    final_sets.append({'space': d['space'].intersection(param['goal_set']), 'step': d['step']})
+                final_sets = []
 
-            if len(final_sets) > 0:
-                node_temp = expand_node(node, final_sets, drive_area, 'final', ref_traj, change_goal, lanelets)
-                if min_cost is None or node_temp.cost < min_cost:
-                    min_cost = node_temp.cost
-                    final_node = deepcopy(node_temp)
+                for d in drive_area:
+                    if goal['time_start'] <= d['step'] <= goal['time_end'] and d['space'].intersects(goal['set']):
+                        final_sets.append({'space': d['space'].intersection(goal['set']), 'step': d['step']})
+
+                if len(final_sets) > 0:
+                    node_temp = expand_node(node, final_sets, drive_area, 'final', ref_traj, change_goal, lanelets)
+                    if min_cost is None or node_temp.cost < min_cost:
+                        min_cost = node_temp.cost
+                        final_node = deepcopy(node_temp)
 
         # create child nodes
         for entry in x0:
