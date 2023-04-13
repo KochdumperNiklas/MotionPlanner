@@ -10,6 +10,7 @@ from shapely.ops import nearest_points
 from copy import deepcopy
 from commonroad.scenario.obstacle import StaticObstacle
 from commonroad.geometry.shape import ShapeGroup
+from commonroad.visualization.util import collect_center_line_colors
 
 # weighting factors for the cost function
 W_LANE_CHANGE = 1000
@@ -34,7 +35,7 @@ def highLevelPlanner(scenario, planning_problem, param):
     param, lanelets, speed_limit = initialization(scenario, planning_problem, param)
 
     # compute free space on each lanelet for each time step
-    free_space, partially_occupied = free_space_lanelet(lanelets, scenario.obstacles, speed_limit, param)
+    free_space, partially_occupied = free_space_lanelet(lanelets, scenario, speed_limit, param)
 
     # compute distance to goal lanelet and number of required lane changes for each lanelet
     change_goal, dist_goal = distance2goal(lanelets, param)
@@ -369,9 +370,10 @@ def velocity_profile_single(dist, vel_des, x0_ind, goal, param):
 
     return vel
 
-def free_space_lanelet(lanelets, obstacles, speed_limit, param):
+def free_space_lanelet(lanelets, scenario, speed_limit, param):
     """compute free space on each lanelet for all time steps"""
 
+    obstacles = scenario.obstacles
     free_space_all = []
     tmp = [deepcopy([[] for i in range(0, param['steps']+1)]) for j in range(len(lanelets))]
     occupied_space = dict(zip(lanelets.keys(), deepcopy(tmp)))
@@ -555,7 +557,19 @@ def free_space_lanelet(lanelets, obstacles, speed_limit, param):
 
         free_space_all.append(free_space)
 
-    return dict(zip(lanelets.keys(), free_space_all)), partially_occupied
+    free_space_all = dict(zip(lanelets.keys(), free_space_all))
+
+    # remove free space for lanelets that are blocked by a red traffic light
+    if len(scenario.lanelet_network.traffic_lights) > 0:
+
+        # loop over all time steps
+        for i in range(0, param['steps']):
+            status = collect_center_line_colors(scenario.lanelet_network, scenario.lanelet_network.traffic_lights, i)
+            for l in status.keys():
+                if not l in param['x0_lane'] and status[l].value == 'red':
+                    free_space_all[l][i] = []
+
+    return free_space_all, partially_occupied
 
 
 def projection_lanelet_centerline(lanelet, pgon):
