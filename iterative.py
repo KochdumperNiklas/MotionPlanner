@@ -22,11 +22,13 @@ from commonroad.scenario.lanelet import LaneletNetwork
 from commonroad.planning.goal import GoalRegion
 from commonroad.scenario.state import CustomState
 from commonroad.scenario.state import InitialState
+from commonroad.scenario.traffic_sign import TrafficLight, TrafficLightCycleElement, TrafficLightState
 from commonroad.common.util import Interval
 from commonroad.planning.planning_problem import PlanningProblem
 from commonroad.planning.planning_problem import PlanningProblemSet
 from commonroad_route_planner.route_planner import RoutePlanner
 from commonroad_route_planner.utility.visualization import visualize_route
+from commonroad.visualization.util import collect_center_line_colors
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -82,6 +84,13 @@ while lanelet != route.list_ids_lanelets[-1]:
 
     scenario_ = prediction(vehicles, deepcopy(scenario), HORIZON)
 
+    # add traffic lights
+    state = TrafficLightState('red')
+    cycle = TrafficLightCycleElement(state, HORIZON * scenario.dt)
+    traffic_light = TrafficLight(scenario_.generate_object_id(), [cycle])
+
+    test = scenario_.lanelet_network.add_traffic_light(traffic_light, [1])
+
     # create motion planning problem
     goal_states = []
     lanelets_of_goal_position = {}
@@ -119,6 +128,18 @@ while lanelet != route.list_ids_lanelets[-1]:
         scenario.draw(rnd)
         planning_problem.draw(rnd)
 
+        # plot traffic lights
+        if len(scenario_.lanelet_network.traffic_lights) > 0:
+            status = collect_center_line_colors(scenario_.lanelet_network, scenario_.lanelet_network.traffic_lights, 0)
+            settings = ShapeParams(opacity=1, edgecolor="k", linewidth=0.0, facecolor='r')
+            for l in status.keys():
+                lane = scenario_.lanelet_network.find_lanelet_by_id(l)
+                for j in range(len(lane.distance)-1):
+                    center = 0.5*(lane.center_vertices[j, :] + lane.center_vertices[j+1, :])
+                    d = lane.center_vertices[j+1, :] - lane.center_vertices[j, :]
+                    r = Rectangle(length=np.linalg.norm(d), width=0.6, center=center, orientation=np.arctan2(d[1], d[0]))
+                    r.draw(rnd, settings)
+
         # plot prediction for the other vehicles
         for d in scenario_.dynamic_obstacles:
             for j in range(len(d.prediction.trajectory.state_list), 0, -1):
@@ -136,9 +157,9 @@ while lanelet != route.list_ids_lanelets[-1]:
         for j in range(x.shape[1]-1, -1, -1):
             if j >= i:
                 if j == i:
-                    settings = ShapeParams(opacity=1, edgecolor="k", linewidth=1.0, facecolor='r')
+                    settings = ShapeParams(opacity=1, edgecolor="k", linewidth=1.0, facecolor='#d95558')
                 else:
-                    settings = ShapeParams(opacity=0.2, edgecolor="k", linewidth=0.0, facecolor='r')
+                    settings = ShapeParams(opacity=0.2, edgecolor="k", linewidth=0.0, facecolor='#d95558')
                 r = Rectangle(length=param['length'], width=param['width'], center=np.array([x[0, j], x[1, j]]),
                               orientation=x[3, j])
                 r.draw(rnd, settings)
