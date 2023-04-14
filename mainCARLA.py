@@ -22,9 +22,13 @@ from commonroad.geometry.shape import Rectangle
 from commonroad.visualization.draw_params import ShapeParams
 from shapely.geometry import Point
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
 import numpy as np
 import os
 import pickle
+import cv2
 from copy import deepcopy
 
 from vehicle.vehicleParameter import vehicleParameter
@@ -54,6 +58,7 @@ REPLAN = 5
 SENSORRANGE = 100
 MAP = 'Town01'
 VISUALIZE = True
+VIDEO = False
 
 
 class CarlaSyncMode(object):
@@ -131,7 +136,7 @@ def main():
     # initialize CARLA
     actor_list = []
     pygame.init()
-    display = pygame.display.set_mode((800, 600), pygame.HWSURFACE | pygame.DOUBLEBUF)
+    display = pygame.display.set_mode((800, 800), pygame.HWSURFACE | pygame.DOUBLEBUF)
     client = carla.Client('localhost', 2000)
     client.set_timeout(2.0)
     world = client.get_world()
@@ -160,6 +165,11 @@ def main():
     lanelet = route.list_ids_lanelets[0]
     cnt_init = 0
     cnt_time = REPLAN
+    plt.figure(figsize=(8, 8))
+
+    if VIDEO:
+        fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+        video = cv2.VideoWriter(os.path.join('auxiliary', 'videoCARLA.mp4'), fourcc, 10, (800, 2*800))
 
     # create traffic
     vehicle_blueprints = world.get_blueprint_library().filter('*vehicle*')
@@ -284,6 +294,7 @@ def main():
 
                     plt.cla()
                     rnd = MPRenderer()
+                    canvas = FigureCanvasAgg(rnd.f)
 
                     rnd.draw_params.time_begin = cnt_time
                     rnd.draw_params.time_end = HORIZON
@@ -335,15 +346,44 @@ def main():
                             r.draw(rnd, settings)
 
                     rnd.render()
-                    plt.xlim([min(x[0, :]) - 20, max(x[0, :]) + 20])
-                    plt.ylim([min(x[1, :]) - 20, max(x[1, :]) + 20])
+                    w0 = max(x[0, :]) - min(x[0, :])
+                    w1 = max(x[1, :]) - min(x[1, :])
+                    if w0 > w1:
+                        plt.xlim([min(x[0, :]) - 20, max(x[0, :]) + 20])
+                        plt.ylim([min(x[1, :]) - 20 - 0.5 * (w0 - w1), max(x[1, :]) + 20 + 0.5 * (w0 - w1)])
+                    else:
+                        plt.xlim([min(x[0, :]) - 20 - 0.5 * (w1 - w0), max(x[0, :]) + 20 + 0.5 * (w1 - w0)])
+                        plt.ylim([min(x[1, :]) - 20, max(x[1, :]) + 20])
                     ax = plt.gca()
                     ax.axes.xaxis.set_ticks([])
                     ax.axes.yaxis.set_ticks([])
                     plt.pause(0.01)
 
+                # create video
+                if VIDEO:
+
+                    # get image from CARLA
+                    array = np.frombuffer(image_rgb.raw_data, dtype=np.dtype("uint8"))
+                    frame1 = np.reshape(array, (image_rgb.height, image_rgb.width, 4))
+                    array = array[:, :, :3]
+
+                    # extract image of planned trajectory from plotted figure
+                    canvas.draw()
+                    buf = canvas.buffer_rgba()
+                    frame2 = np.asarray(buf)
+
+                    # combine images
+                    frame = np.concatenate((frame1, frame2), axis=1)
+
+                    # add frame to video
+                    video.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+
 
     finally:
+
+        # write video to file
+        cv2.destroyAllWindows()
+        video.release()
 
         print('destroying actors.')
         for actor in actor_list:
