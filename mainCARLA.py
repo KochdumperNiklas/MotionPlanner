@@ -58,7 +58,7 @@ REPLAN = 5
 SENSORRANGE = 100
 MAP = 'Town01'
 VISUALIZE = True
-VIDEO = False
+VIDEO = True
 
 
 class CarlaSyncMode(object):
@@ -136,7 +136,7 @@ def main():
     # initialize CARLA
     actor_list = []
     pygame.init()
-    display = pygame.display.set_mode((800, 800), pygame.HWSURFACE | pygame.DOUBLEBUF)
+    display = pygame.display.set_mode((800, 600), pygame.HWSURFACE | pygame.DOUBLEBUF)
     client = carla.Client('localhost', 2000)
     client.set_timeout(2.0)
     world = client.get_world()
@@ -161,15 +161,15 @@ def main():
     # initialization
     state = planning_problem.initial_state
     x0 = np.concatenate((state.position, np.array([state.velocity, state.orientation])))
-    start_pose = Transform(Location(x=x0[0], y=-x0[1], z=0.3), Rotation(pitch=0.0, yaw=-np.rad2deg(x0[3]), roll=0.0))
+    start_pose = Transform(Location(x=x0[0], y=-x0[1], z=0.1), Rotation(pitch=0.0, yaw=-np.rad2deg(x0[3]), roll=0.0))
     lanelet = route.list_ids_lanelets[0]
     cnt_init = 0
     cnt_time = REPLAN
-    plt.figure(figsize=(8, 8))
+    plt.figure(figsize=(6, 6))
 
     if VIDEO:
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-        video = cv2.VideoWriter(os.path.join('auxiliary', 'videoCARLA.mp4'), fourcc, 10, (800, 2*800))
+        video = cv2.VideoWriter(os.path.join('auxiliary', 'videoCARLA.mp4'), fourcc, 10, (800+600, 600))
 
     # create traffic
     vehicle_blueprints = world.get_blueprint_library().filter('*vehicle*')
@@ -178,8 +178,8 @@ def main():
         point = random.choice(spawn_points)
         if (point.location.x - x0[0])**2 + (-point.location.y - x0[1])**2 > 10**2:
             world.try_spawn_actor(random.choice(vehicle_blueprints), point)
-    for vehicle in world.get_actors().filter('*vehicle*'):
-        vehicle.set_autopilot(True)
+    for v in world.get_actors().filter('*vehicle*'):
+        v.set_autopilot(True)
 
     try:
 
@@ -224,6 +224,10 @@ def main():
                             velocity = np.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
                             length = 2*v.bounding_box.extent.x
                             width = 2*v.bounding_box.extent.y
+                            if length == 0:
+                                length = 4
+                            if width == 0:
+                                width = 2
                             vehicles.append({'width': width, 'length': length, 'x': transform.location.x,
                                              'y': -transform.location.y, 'velocity': velocity,
                                              'orientation': -orientation})
@@ -231,16 +235,24 @@ def main():
                     scenario_ = prediction(vehicles, deepcopy(scenario), HORIZON)
 
                     # consider red traffic lights
-                    if vehicle.is_at_traffic_light():
-                        traffic_light = vehicle.get_traffic_light()
-                        points = []
-                        for wp in traffic_light.get_affected_lane_waypoints():
-                            points.append(np.array([wp.Transform.location.x, -wp.Transform.location.y]))
-                        lanes = scenario.lanelet_network.find_lanelet_by_position(points)
-                        lanes = list(np.unique(np.asarray(lanes)))
-                        cycle = TrafficLightCycleElement(TrafficLightState('red'), HORIZON * scenario.dt)
-                        traffic_light = TrafficLight(scenario_.generate_object_id(), [cycle])
-                        _ = scenario_.lanelet_network.add_traffic_light(traffic_light, lanes)
+                    for traffic_light in world.get_actors().filter('*traffic_light*'):
+                        if str(traffic_light.get_state()) == 'Red':
+                            points = []
+                            for wp in traffic_light.get_affected_lane_waypoints():
+                                points.append(np.array([wp.transform.location.x, -wp.transform.location.y]))
+                            lanesPrev = scenario.lanelet_network.find_lanelet_by_position(points)
+                            lanes = []
+                            for lane in list(np.unique(np.asarray(lanesPrev))):
+                                try:
+                                    l = scenario.lanelet_network.find_lanelet_by_id(lane)
+                                    lanes = lanes + l.predecessor
+                                except:
+                                    test = 1
+                            lanes = list(np.unique(np.asarray(lanes)))
+                            if len(lanes) > 0:
+                                cycle = TrafficLightCycleElement(TrafficLightState('red'), HORIZON * scenario.dt)
+                                traffic_light = TrafficLight(scenario_.generate_object_id(), [cycle])
+                                _ = scenario_.lanelet_network.add_traffic_light(traffic_light, lanes)
 
                     # get lanelet for the current state
                     lane = scenario.lanelet_network.find_lanelet_by_id(lanelet)
@@ -251,28 +263,28 @@ def main():
                                 cnt_init = i
                                 lanelet = l.lanelet_id
 
-                        # create motion planning problem
-                        goal_states = []
-                        lanelets_of_goal_position = {}
+                    # create motion planning problem
+                    goal_states = []
+                    lanelets_of_goal_position = {}
 
-                        dist_max = x0[2] * scenario.dt * HORIZON + 0.5 * param['a_max'] * (scenario.dt * HORIZON) ** 2
-                        dist = 0
+                    dist_max = x0[2] * scenario.dt * HORIZON + 0.5 * param['a_max'] * (scenario.dt * HORIZON) ** 2
+                    dist = 0
 
-                        for i in range(cnt_init, len(route.list_ids_lanelets)):
-                            goal_id = route.list_ids_lanelets[i]
-                            goal_lane = scenario.lanelet_network.find_lanelet_by_id(goal_id)
-                            goal_states.append(
-                                CustomState(time_step=Interval(HORIZON, HORIZON), position=goal_lane.polygon))
-                            lanelets_of_goal_position[len(goal_states) - 1] = [goal_id]
-                            if i > cnt_init:
-                                dist = dist + goal_lane.distance[-1]
-                            if dist > dist_max:
-                                break
+                    for i in range(cnt_init, len(route.list_ids_lanelets)):
+                        goal_id = route.list_ids_lanelets[i]
+                        goal_lane = scenario.lanelet_network.find_lanelet_by_id(goal_id)
+                        goal_states.append(
+                            CustomState(time_step=Interval(HORIZON, HORIZON), position=goal_lane.polygon))
+                        lanelets_of_goal_position[len(goal_states) - 1] = [goal_id]
+                        if i > cnt_init:
+                            dist = dist + goal_lane.distance[-1]
+                        if dist > dist_max:
+                            break
 
-                        goal_region = GoalRegion(goal_states, lanelets_of_goal_position=lanelets_of_goal_position)
-                        initial_state = InitialState(position=x0[0:2], velocity=x0[2], orientation=x0[3], yaw_rate=0,
-                                                     slip_angle=0, time_step=0)
-                        planning_problem = PlanningProblemSet([PlanningProblem(1, initial_state, goal_region)])
+                    goal_region = GoalRegion(goal_states, lanelets_of_goal_position=lanelets_of_goal_position)
+                    initial_state = InitialState(position=x0[0:2], velocity=x0[2], orientation=x0[3], yaw_rate=0,
+                                                 slip_angle=0, time_step=0)
+                    planning_problem = PlanningProblemSet([PlanningProblem(1, initial_state, goal_region)])
 
                     # solve motion planning problem
                     plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param)
@@ -346,14 +358,8 @@ def main():
                             r.draw(rnd, settings)
 
                     rnd.render()
-                    w0 = max(x[0, :]) - min(x[0, :])
-                    w1 = max(x[1, :]) - min(x[1, :])
-                    if w0 > w1:
-                        plt.xlim([min(x[0, :]) - 20, max(x[0, :]) + 20])
-                        plt.ylim([min(x[1, :]) - 20 - 0.5 * (w0 - w1), max(x[1, :]) + 20 + 0.5 * (w0 - w1)])
-                    else:
-                        plt.xlim([min(x[0, :]) - 20 - 0.5 * (w1 - w0), max(x[0, :]) + 20 + 0.5 * (w1 - w0)])
-                        plt.ylim([min(x[1, :]) - 20, max(x[1, :]) + 20])
+                    plt.xlim([x[0, cnt_time] - 40, x[0, cnt_time] + 40])
+                    plt.ylim([x[1, cnt_time] - 40, x[1, cnt_time] + 40])
                     ax = plt.gca()
                     ax.axes.xaxis.set_ticks([])
                     ax.axes.yaxis.set_ticks([])
@@ -365,25 +371,27 @@ def main():
                     # get image from CARLA
                     array = np.frombuffer(image_rgb.raw_data, dtype=np.dtype("uint8"))
                     frame1 = np.reshape(array, (image_rgb.height, image_rgb.width, 4))
-                    array = array[:, :, :3]
+                    frame1 = frame1[:, :, :3]
 
                     # extract image of planned trajectory from plotted figure
                     canvas.draw()
                     buf = canvas.buffer_rgba()
                     frame2 = np.asarray(buf)
+                    frame2 = cv2.cvtColor(frame2, cv2.COLOR_RGB2BGR)
 
                     # combine images
                     frame = np.concatenate((frame1, frame2), axis=1)
 
                     # add frame to video
-                    video.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+                    video.write(frame)
 
 
     finally:
 
         # write video to file
-        cv2.destroyAllWindows()
-        video.release()
+        if VIDEO:
+            cv2.destroyAllWindows()
+            video.release()
 
         print('destroying actors.')
         for actor in actor_list:
