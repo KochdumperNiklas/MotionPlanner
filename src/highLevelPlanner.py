@@ -566,8 +566,30 @@ def free_space_lanelet(lanelets, scenario, speed_limit, param):
         for i in range(0, param['steps']):
             status = collect_center_line_colors(scenario.lanelet_network, scenario.lanelet_network.traffic_lights, i)
             for l in status.keys():
-                if not l in param['x0_lane'] and status[l].value == 'red':
-                    free_space_all[l][i] = []
+                if status[l].value == 'red':
+                    if not l in param['x0_lane']:
+                        free_space_all[l][i] = []
+                    for s in lanelets[l].predecessor:
+                        pgon = interval2polygon([lanelets[s].distance[-1] - 0.5 * param['length_max'], -1000],
+                                                [lanelets[s].distance[-1], 1000])
+                        is_init = False
+                        if s in param['x0_lane']:
+                            for j in range(len(param['x0_lane'])):
+                                if param['x0_lane'] == s:
+                                    x0 = param['x0_set']
+                                    if pgon.bounds[0] < x0 < pgon.bounds[2]:
+                                        is_init = True
+                                    break
+                        if not is_init:
+                            cnt = len(free_space_all[s][i])
+                            for j in range(len(free_space_all[s][i])-1, -1, -1):
+                                if free_space_all[s][i][j].intersects(pgon):
+                                    if pgon.contains(free_space_all[s][i][j]):
+                                        cnt = j
+                                    else:
+                                        free_space_all[s][i][j] = free_space_all[s][i][j].difference(pgon)
+                                        break
+                            free_space_all[s][i] = free_space_all[s][i][0:cnt]
 
     return free_space_all, partially_occupied
 
