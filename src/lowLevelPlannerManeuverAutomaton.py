@@ -45,7 +45,7 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
         primitive = MA.primitives[node.primitives[-1]]
 
         # check if motion primitive is collision free
-        if collision_check(node, primitive, space_all, vel, param):
+        if collision_check(node, primitive, space_all, param):
 
             #print(node.primitives)
 
@@ -77,7 +77,7 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
     return None, None
 
 
-def collision_check(node, primitive, space, vel, param):
+def collision_check(node, primitive, space, param):
     """check if a motion primitive is collision free"""
 
     # check if the maximum time is exceeded
@@ -91,14 +91,6 @@ def collision_check(node, primitive, space, vel, param):
             break
 
     if time_exceeded:
-        return False
-
-    # check if the final velocity is inside the valid range
-    index = min(node.x.shape[1]-1, len(vel)-1)
-
-    v_final = node.x[2, index]
-
-    if v_final <= vel[index][0] - 1e-10 or v_final >= vel[index][1] + 1e-10:
         return False
 
     # get state at the before the last primitive
