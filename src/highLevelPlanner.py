@@ -1356,7 +1356,11 @@ def trajectory_position_velocity(space, plan, vel_prof, lanelets, param):
 
     v = np.asarray(vel_prof)
     x = np.zeros(v.shape)
-    x[0] = param['x0_set'][0]
+
+    for i in range(len(param['x0_lane'])):
+        if param['x0_lane'][i] == plan[0]:
+            x[0] = param['x0_set'][i]
+            break
 
     dist = 0
 
