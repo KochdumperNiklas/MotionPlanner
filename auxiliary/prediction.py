@@ -69,10 +69,13 @@ def prediction(vehicles, scenario, horizon, most_likely=True):
 
                 # check if trajectory length reached horizon -> finished
                 if i == horizon - 1:
-                    trajectories.append(deepcopy(states))
+                    trajectories.append({'trajectory': deepcopy(states), 'vehicle': v})
 
     # add all trajectories to the CommonRoad traffic scenario
-    for t in trajectories:
+    for traj in trajectories:
+
+        t = traj['trajectory']
+        v = traj['vehicle']
 
         # create the trajectory of the obstacle, starting at time step 0
         dynamic_obstacle_trajectory = Trajectory(0, t)
