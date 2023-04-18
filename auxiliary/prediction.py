@@ -9,10 +9,19 @@ from commonroad.scenario.state import CustomState
 from commonroad.scenario.trajectory import Trajectory
 from commonroad.prediction.prediction import TrajectoryPrediction
 
-def prediction(vehicles, scenario, horizon, most_likely=True):
+def prediction(vehicles, scenario, horizon, x_ego, most_likely=True):
     """predict the future positions of the surrounding vehicles"""
 
     trajectories = []
+
+    # find all possible lanelets for the ego-vehicle
+    lanes_ego = scenario.lanelet_network.find_lanelet_by_position([x_ego[0:2]])
+    lanes_ego = lanes_ego[0]
+
+    dist_ego = []
+    for lane in lanes_ego:
+        l = scenario.lanelet_network.find_lanelet_by_id(lane)
+        dist_ego.append(distance_on_lanelet(l, x_ego[0], x_ego[1]))
 
     # loop over all surrounding vehicles
     for v in vehicles:
@@ -26,9 +35,7 @@ def prediction(vehicles, scenario, horizon, most_likely=True):
                          orientation=v['orientation'], time_step=0)
 
         if most_likely:
-            lanes = scenario.lanelet_network.find_most_likely_lanelet_by_state([CustomState(
-                position=np.array([v['x'], v['y']]), velocity=v['velocity'], orientation=v['orientation'],
-                time_step=0)])
+            lanes = scenario.lanelet_network.find_most_likely_lanelet_by_state([x0])
         else:
             lanes = scenario.lanelet_network.find_lanelet_by_position([np.array([v['x'], v['y']])])
             lanes = lanes[0]
@@ -49,6 +56,18 @@ def prediction(vehicles, scenario, horizon, most_likely=True):
             for i in range(len(node['states']), horizon):
 
                 dist = x[i] - node['dist']
+
+                # check if the vehicle would crash into the ego-vehicle from behind
+                abort = False
+
+                for j in range(len(lanes_ego)):
+                    if l.lanelet_id == lanes_ego[j] and dist_ego[j] > dist > dist_ego[j] - 5 - v['length']/2:
+                        abort = True
+                        break
+
+                if abort:
+                    trajectories.append({'trajectory': deepcopy(states), 'vehicle': v})
+                    break
 
                 # create child nodes from the successor lanelets
                 if dist > l.distance[-1]:
