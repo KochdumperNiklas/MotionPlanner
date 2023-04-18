@@ -9,8 +9,7 @@ from commonroad.scenario.state import CustomState
 from commonroad.scenario.trajectory import Trajectory
 from commonroad.prediction.prediction import TrajectoryPrediction
 
-
-def prediction(vehicles, scenario, horizon):
+def prediction(vehicles, scenario, horizon, most_likely=True):
     """predict the future positions of the surrounding vehicles"""
 
     trajectories = []
@@ -26,10 +25,18 @@ def prediction(vehicles, scenario, horizon):
         x0 = CustomState(position=np.array([v['x'], v['y']]), velocity=v['velocity'],
                          orientation=v['orientation'], time_step=0)
 
-        for l in scenario.lanelet_network.lanelets:
-            if l.polygon.shapely_object.contains(Point(v['x'], v['y'])):
-                dist = distance_on_lanelet(l, v['x'], v['y'])
-                queue.append({'states': [x0], 'dist': -dist, 'lanelet': l.lanelet_id})
+        if most_likely:
+            lanes = scenario.lanelet_network.find_most_likely_lanelet_by_state([CustomState(
+                position=np.array([v['x'], v['y']]), velocity=v['velocity'], orientation=v['orientation'],
+                time_step=0)])
+        else:
+            lanes = scenario.lanelet_network.find_lanelet_by_position([np.array([v['x'], v['y']])])
+            lanes = lanes[0]
+
+        for lane in lanes:
+            l = scenario.lanelet_network.find_lanelet_by_id(lane)
+            dist = distance_on_lanelet(l, v['x'], v['y'])
+            queue.append({'states': [x0], 'dist': -dist, 'lanelet': l.lanelet_id})
 
         # loop until queue is empty
         while len(queue) > 0:
