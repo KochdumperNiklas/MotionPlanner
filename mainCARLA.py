@@ -235,14 +235,26 @@ def main():
                     scenario_ = prediction(vehicles, deepcopy(scenario), HORIZON)
 
                     # consider red traffic lights
+                    points_all = []
                     for traffic_light in world.get_actors().filter('*traffic_light*'):
                         if str(traffic_light.get_state()) == 'Red':
                             points = []
                             for wp in traffic_light.get_affected_lane_waypoints():
                                 points.append(np.array([wp.transform.location.x, -wp.transform.location.y]))
-                            lanesPrev = scenario.lanelet_network.find_lanelet_by_position(points)
-                            lanes = []
+                            points_all = points_all + points
+                            lanesPrev = scenario.lanelet_network.find_lanelet_by_position([points[-1]])
+                            lanesPrev_ = []
                             for lane in list(np.unique(np.asarray(lanesPrev))):
+                                l = scenario.lanelet_network.find_lanelet_by_id(lane)
+                                d1 = (l.center_vertices[-1, 0] - points[-1][0])**2 + (l.center_vertices[-1, 1] - points[-1][1])**2
+                                d2 = (l.center_vertices[-2, 0] - points[-1][0]) ** 2 + (
+                                            l.center_vertices[-2, 1] - points[-1][1]) ** 2
+                                if d1 < d2:
+                                    lanesPrev_ = lanesPrev_ + l.successor
+                                else:
+                                    lanesPrev_.append(lane)
+                            lanes = []
+                            for lane in list(np.unique(np.asarray(lanesPrev_))):
                                 try:
                                     l = scenario.lanelet_network.find_lanelet_by_id(lane)
                                     lanes = lanes + l.predecessor
