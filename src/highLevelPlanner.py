@@ -1105,13 +1105,15 @@ def space_lane_changes(space, plan, lanelets, free_space, partially_occupied, pa
     # get drivable area (without space for lane changes) in the global coordinate frame
     space_glob = lanelet2global(space, plan, lanelets)
 
-    # add space from left and right lanelet for the beginning since the initial position is not necessarily in lanelet
-    for i in range(min(10, len(plan))):
-
+    # add free space on the same lanelet to drive on
+    for i in range(0, len(plan)):
         for f in free_space[plan[i]][i]:
             if f.intersects(space[i]):
                 pgon = lanelet2global([f], [plan[i]], lanelets)
                 space_glob[i] = union_robust(space_glob[i], pgon[0])
+
+    # add space from left and right lanelet for the beginning since the initial position is not necessarily in lanelet
+    for i in range(min(10, len(plan))):
 
         if not lanelets[plan[i]].adj_right is None and lanelets[plan[i]].adj_right_same_direction:
             for f in free_space[lanelets[plan[i]].adj_right][i]:
@@ -1235,7 +1237,10 @@ def space_lane_changes(space, plan, lanelets, free_space, partially_occupied, pa
         for l in lanes:
             for p in partially_occupied[l][i]:
 
-                sp = lanelet2global([p['space']], [l], lanelets, p['width'])[0]
+                p1 = translate(p['space'], -0.5*param['length_max'], 0)
+                p2 = translate(p['space'], 0.5*param['length_max'], 0)
+
+                sp = lanelet2global([p1.intersection(p2)], [l], lanelets, p['width'])[0]
 
                 if sp.intersects(space_glob[i]):
                     space_glob[i] = space_glob[i].difference(sp)
