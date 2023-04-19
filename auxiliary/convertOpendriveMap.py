@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from copy import deepcopy
 from lxml import etree
 from shapely.geometry import Point
 from shapely.geometry import LineString
@@ -197,6 +198,28 @@ def remove_unreachable_lanelets(scenario, start):
 
     return scenario
 
+def remove_lanelets_without_successor(scenario):
+    """remove all lanelets that do not have a successor or predecessor"""
+
+    found = True
+
+    while found:
+
+        lanelets = []
+        found = False
+
+        for l in scenario.lanelet_network.lanelets:
+
+            if len(l.successor) > 0 and len(l.predecessor) > 0:
+                lanelets.append(l)
+            else:
+                found = True
+
+        network = LaneletNetwork.create_from_lanelet_list(deepcopy(lanelets), cleanup_ids=True)
+        scenario.replace_lanelet_network(network)
+
+    return scenario
+
 def mirror_lanelets(scenario, index):
     """mirror the coordinate given by index"""
 
@@ -244,6 +267,28 @@ def add_speed_limit(scenario, limit):
 
         ts = TrafficSign(scenario.generate_object_id(), [elem], l.lanelet_id)
         scenario.lanelet_network.add_traffic_sign(ts, [l.lanelet_id])
+
+    return scenario
+
+def remove_line_markings(scenario):
+    """remove all line markings from the lanelets"""
+
+    lanelets = []
+
+    for l in scenario.lanelet_network.lanelets:
+
+        lanelets.append(Lanelet(l.left_vertices, l.center_vertices, l.right_vertices, l.lanelet_id,
+                              predecessor=l.predecessor, successor=l.successor, adjacent_left=l.adj_left,
+                              adjacent_left_same_direction=l.adj_left_same_direction, adjacent_right=l.adj_right,
+                              adjacent_right_same_direction=l.adj_right_same_direction,
+                              line_marking_left_vertices=None,
+                              line_marking_right_vertices=None,
+                              stop_line=None, lanelet_type=l.lanelet_type, user_one_way=l.user_one_way,
+                              user_bidirectional=l.user_bidirectional, traffic_signs=l.traffic_signs,
+                              traffic_lights=l.traffic_lights))
+
+    network = LaneletNetwork.create_from_lanelet_list(lanelets, cleanup_ids=True)
+    scenario.replace_lanelet_network(network)
 
     return scenario
 
@@ -303,7 +348,7 @@ if __name__ == "__main__":
     """main entry point"""
 
     # load OpenDRIVE file, parse it, and convert it to a CommonRoad scenario
-    scenario = opendrive_to_commonroad("Town01.xodr")
+    scenario = opendrive_to_commonroad("Town03.xodr")
     #scenario, planning_problem = CommonRoadFileReader('Town01.xml').open()
 
     # remove small lanelets
@@ -319,10 +364,17 @@ if __name__ == "__main__":
     #scenario = remove_outer_lanelets(scenario)
 
     # remove lanelets that are not reachable from the starting lanelet
-    scenario = remove_unreachable_lanelets(scenario, 2)
+    scenario = remove_unreachable_lanelets(scenario, 429)
+
+    # remove lanelets that do not have a successor or predecessor
+    scenario = remove_lanelets_without_successor(scenario)
+
+    # remove line markings from the lanelets
+    scenario = remove_line_markings(scenario)
 
     # add speed limit
-    scenario = add_speed_limit(scenario, 8.3)
+    #scenario = add_speed_limit(scenario, 8.3)
+    scenario = add_speed_limit(scenario, 6)
 
     # mirror y coordinate
     #scenario = mirror_lanelets(scenario, 1)
@@ -333,7 +385,8 @@ if __name__ == "__main__":
     # define planning problem
     lanelet = 196
     lanelet = 1
-    lanelet = scenario.lanelet_network.find_lanelet_by_position([np.array([185, -195])])[0][0]
+    lanelet = scenario.lanelet_network.find_lanelet_by_position([np.array([76, -48])])[0][0]
+    #lanelet = scenario.lanelet_network.find_lanelet_by_position([np.array([185, -195])])[0][0]
 
     for l in scenario.lanelet_network.lanelets:
         if l.lanelet_id == lanelet:
@@ -342,7 +395,9 @@ if __name__ == "__main__":
     #goal_state = CustomState(time_step=Interval(30, 30))
     #goal_region = GoalRegion([goal_state], lanelets_of_goal_position={0: [9]})
     goal_region = GoalRegion([goal_state], lanelets_of_goal_position=None)
-    initial_state = InitialState(position=np.array([396.5, -30]), velocity=0, orientation=np.pi/2, yaw_rate=0, slip_angle=0, time_step=0)
+    initial_state = InitialState(position=np.array([-89, 110]), velocity=0, orientation=-np.pi / 2, yaw_rate=0,
+                                 slip_angle=0, time_step=0)
+    #initial_state = InitialState(position=np.array([396.5, -30]), velocity=0, orientation=np.pi/2, yaw_rate=0, slip_angle=0, time_step=0)
     planning_problem = PlanningProblem(1, initial_state, goal_region)
 
     # store converted file as CommonRoad scenario
