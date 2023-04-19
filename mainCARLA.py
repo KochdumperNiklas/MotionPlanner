@@ -152,6 +152,19 @@ def main():
     # load the CommonRoad scenario
     scenario, planning_problem = CommonRoadFileReader(os.path.join('auxiliary', MAP + '.xml')).open()
 
+    # create random planning problem
+    spawn_points = world.get_map().get_spawn_points()
+    start = random.choice(spawn_points)
+    initial_state = InitialState(position=np.array([start.location.x, -start.location.y]),
+                                 velocity=0, orientation=-np.deg2rad(start.rotation.yaw), yaw_rate=0,
+                                 slip_angle=0, time_step=0)
+    goal = random.choice(spawn_points)
+    id = scenario.lanelet_network.find_lanelet_by_position([np.array([goal.location.x, -goal.location.y])])
+    l = scenario.lanelet_network.find_lanelet_by_id(id[0][0])
+    goal_state = CustomState(position=l.polygon, time_step=Interval(0, 0))
+    goal_region = GoalRegion([goal_state], lanelets_of_goal_position=None)
+    planning_problem = PlanningProblemSet([PlanningProblem(1, initial_state, goal_region)])
+
     # plan route
     planning_problem = list(planning_problem.planning_problem_dict.values())[0]
     route_planner = RoutePlanner(scenario, planning_problem, backend=RoutePlanner.Backend.NETWORKX_REVERSED)
@@ -170,6 +183,16 @@ def main():
     if VIDEO:
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
         video = cv2.VideoWriter(os.path.join('auxiliary', 'videoCARLA.mp4'), fourcc, 10, (800+600, 600))
+
+    # set weather
+    w = [carla.WeatherParameters.ClearNoon, carla.WeatherParameters.CloudyNoon, carla.WeatherParameters.WetNoon,
+         carla.WeatherParameters.WetCloudyNoon, carla.WeatherParameters.SoftRainNoon,
+         carla.WeatherParameters.MidRainyNoon, carla.WeatherParameters.HardRainNoon,
+         carla.WeatherParameters.ClearSunset, carla.WeatherParameters.CloudySunset, carla.WeatherParameters.WetSunset,
+         carla.WeatherParameters.WetCloudySunset, carla.WeatherParameters.SoftRainSunset,
+         carla.WeatherParameters.MidRainSunset, carla.WeatherParameters.HardRainSunset]
+    index = np.random.randint(0, len(w)-1)
+    world.set_weather(w[index])
 
     # create traffic
     vehicle_blueprints = world.get_blueprint_library().filter('*vehicle*')
@@ -225,14 +248,14 @@ def main():
                             length = 2*v.bounding_box.extent.x
                             width = 2*v.bounding_box.extent.y
                             if length == 0:
-                                length = 4
+                                length = 2
                             if width == 0:
-                                width = 2
+                                width = 1
                             vehicles.append({'width': width, 'length': length, 'x': transform.location.x,
                                              'y': -transform.location.y, 'velocity': velocity,
                                              'orientation': -orientation})
 
-                    scenario_ = prediction(vehicles, deepcopy(scenario), HORIZON)
+                    scenario_ = prediction(vehicles, deepcopy(scenario), HORIZON, x0)
 
                     # consider red traffic lights
                     points_all = []
@@ -297,6 +320,11 @@ def main():
                     initial_state = InitialState(position=x0[0:2], velocity=x0[2], orientation=x0[3], yaw_rate=0,
                                                  slip_angle=0, time_step=0)
                     planning_problem = PlanningProblemSet([PlanningProblem(1, initial_state, goal_region)])
+
+                    # store planning problem
+                    data = {'scenario': scenario_, 'problem': planning_problem}
+                    filehandler = open(os.path.join('auxiliary', 'CARLAdata.obj'), 'wb')
+                    pickle.dump(data, filehandler)
 
                     # solve motion planning problem
                     plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param)
