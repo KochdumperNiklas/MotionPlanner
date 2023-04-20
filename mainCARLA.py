@@ -56,7 +56,8 @@ warnings.filterwarnings("ignore")
 HORIZON = 30
 REPLAN = 5
 SENSORRANGE = 100
-MAP = 'Town01'
+CARS = 200
+MAP = 'Town03'
 VISUALIZE = True
 VIDEO = True
 
@@ -178,7 +179,7 @@ def main():
     lanelet = route.list_ids_lanelets[0]
     cnt_init = 0
     cnt_time = REPLAN
-    plt.figure(figsize=(6, 6))
+    plt.figure(figsize=(7, 7))
 
     if VIDEO:
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
@@ -197,7 +198,7 @@ def main():
     # create traffic
     vehicle_blueprints = world.get_blueprint_library().filter('*vehicle*')
     spawn_points = world.get_map().get_spawn_points()
-    for i in range(0, 50):
+    for i in range(0, CARS):
         point = random.choice(spawn_points)
         if (point.location.x - x0[0])**2 + (-point.location.y - x0[1])**2 > 10**2:
             world.try_spawn_actor(random.choice(vehicle_blueprints), point)
@@ -260,7 +261,9 @@ def main():
                     # consider red traffic lights
                     points_all = []
                     for traffic_light in world.get_actors().filter('*traffic_light*'):
-                        if str(traffic_light.get_state()) == 'Red':
+                        loc = traffic_light.get_location()
+                        if str(traffic_light.get_state()) == 'Red' and (loc.x - x0[0])**2 + \
+                                (-loc.y - x0[1])**2 < SENSORRANGE**2:
                             points = []
                             for wp in traffic_light.get_affected_lane_waypoints():
                                 points.append(np.array([wp.transform.location.x, -wp.transform.location.y]))
@@ -269,9 +272,10 @@ def main():
                             lanesPrev_ = []
                             for lane in list(np.unique(np.asarray(lanesPrev))):
                                 l = scenario.lanelet_network.find_lanelet_by_id(lane)
-                                d1 = (l.center_vertices[-1, 0] - points[-1][0])**2 + (l.center_vertices[-1, 1] - points[-1][1])**2
-                                d2 = (l.center_vertices[-2, 0] - points[-1][0]) ** 2 + (
-                                            l.center_vertices[-2, 1] - points[-1][1]) ** 2
+                                d1 = (l.center_vertices[-1, 0] - points[-1][0])**2 + \
+                                     (l.center_vertices[-1, 1] - points[-1][1])**2
+                                d2 = (l.center_vertices[-2, 0] - points[-1][0]) ** 2 + \
+                                     (l.center_vertices[-2, 1] - points[-1][1]) ** 2
                                 if d1 < d2:
                                     lanesPrev_ = lanesPrev_ + l.successor
                                 else:
@@ -284,6 +288,16 @@ def main():
                                 except:
                                     test = 1
                             lanes = list(np.unique(np.asarray(lanes)))
+                            for lane in lanes:
+                                try:
+                                    l = scenario.lanelet_network.find_lanelet_by_id(lane)
+                                    if not l.adj_left is None and l.adj_left_same_direction:
+                                        lanes = lanes + [l.adj_left]
+                                    if not l.adj_right is None and l.adj_right_same_direction:
+                                        lanes = lanes + [l.adj_right]
+                                except:
+                                    test = 1
+                                lanes = list(np.unique(np.asarray(lanes)))
                             if len(lanes) > 0:
                                 cycle = TrafficLightCycleElement(TrafficLightState('red'), HORIZON * scenario.dt)
                                 traffic_light = TrafficLight(scenario_.generate_object_id(), [cycle])
@@ -417,6 +431,7 @@ def main():
                     canvas.draw()
                     buf = canvas.buffer_rgba()
                     frame2 = np.asarray(buf)
+                    frame2 = frame2[53:653, 57:657, :]
                     frame2 = cv2.cvtColor(frame2, cv2.COLOR_RGB2BGR)
 
                     # combine images
