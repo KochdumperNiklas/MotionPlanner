@@ -103,7 +103,7 @@ function R = postprocessing(R,l,w,wb,dt)
        O{i}.time = interval(t(i),t(i+1));
     end
 
-%     % visualization
+    % visualization
 %     figure; hold on;
 % 
 %     for i = 1:length(R_)
@@ -117,6 +117,8 @@ function R = postprocessing(R,l,w,wb,dt)
 %     for i = 1:length(O)
 %         plot(O{i}.set,[1,2],'r');
 %     end
+% 
+%     axis equal
 end
 
 

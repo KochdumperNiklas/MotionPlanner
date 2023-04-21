@@ -14,10 +14,10 @@ Opts = [];
 Opts.N = 10;                        % number of time steps
 Opts.Ninter = 3;                    % number of intermediate time steps
 Opts.reachSteps = 5;                % number of reachability steps
-Opts.Q = diag([1 1 1 10]);          % state weigthing matrix
+Opts.Q = diag([1 5 1 10]);          % state weigthing matrix
 
 Opts.cora.tensorOrder = 3;
-Opts.cora.lagrangeRem.simplify = 'optimize';
+Opts.cora.lagrangeRem.simplify = 'optimize'; 
 
 % postprocessing function (used to compute the occupancy set)
 Post = @(x) postprocessing(x,l,w,wb,dt);
@@ -27,7 +27,7 @@ width = [a_max;s_max];
 U_max = interval(-width,width);
 
 % desired set of control inputs
-width = [8;0.2];
+width = [8;1];
 U_des = interval(-width,width);
 
 % set of uncertain disturbances
@@ -116,6 +116,21 @@ parfor i = 1:length(v)
 
                         [t,x] = ode45(fun,tspan,x0);
 
+                        % heuristically update settings
+                        if v_init <= 4
+                            width = [8;1];
+                            U_des = interval(-width,width);
+                            Opts_.Q = diag([1 25 1 10]);
+                            Opts_.extHorizon.active = 1;
+                            Opts_.extHorizon.horizon = 10;
+                            Opts_.extHorizon.decay = 'fall+End'; 
+                        else
+                            width = [8;0.4];
+                            U_des = interval(-width,width);
+                            Opts_.Q = diag([1 5 1 10]);
+                            Opts_.extHorizon.active = 0;
+                        end
+
                         % update parameters
                         Param_.tFinal = tFinal_;
                         Param_.U = U_max & (u + U_des);
@@ -127,17 +142,15 @@ parfor i = 1:length(v)
                         % synthesise controller for the motion primitive
                         [obj,res] = generatorSpaceControl('vehicle',Param_,Opts_,Post);
 
-                        % save controller to file
-                        parsave(file,'obj');
-
                         % check if the motion primitive can be connected
-                        xf = x(end,:)';
+                        xf = center(obj.Rfin);
                         set = zonotope(Param_.R0 + (-center(Param_.R0)));
-                        phi = Param_.xf(4);
-                        set = blkdiag([cos(phi) -sin(phi); sin(phi) cos(phi)],eye(2)) * set + Param_.xf;
+                        phi = xf(4);
+                        set = blkdiag([cos(phi) -sin(phi); sin(phi) cos(phi)],eye(2)) * set + xf;
 
                         if contains(set,obj.Rfin)
                             disp([name,':     success (acc=',num2str(acc),',steer=',num2str(steer),')']);
+                            parsave(file,'obj');
                         else
                             disp([name,':     failed (acc=',num2str(acc),',steer=',num2str(steer),')']);
                         end
@@ -147,7 +160,6 @@ parfor i = 1:length(v)
         end
     end
 end
-
 
 function parsave(fname, obj)
   save(fname, 'obj');
