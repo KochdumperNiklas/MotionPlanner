@@ -83,6 +83,62 @@ def remove_small_lanelets(scenario):
 
     return scenario
 
+def remove_short_lanelets(scenario, length):
+    """remove all lanelets that are shorter than the given length"""
+
+    # create dictionary that maps a lanelet ID to the corresponding lanelet
+    id = [l.lanelet_id for l in scenario.lanelet_network.lanelets]
+    lanelets = dict(zip(id, scenario.lanelet_network.lanelets))
+    index = []
+
+    # loop over lanelets
+    for i in lanelets.keys():
+
+        if lanelets[i].distance[-1] < length:
+
+            id = lanelets[i].predecessor[0]
+            l = lanelets[id]
+            center = np.concatenate((l.center_vertices, lanelets[i].center_vertices), axis=0)
+            left = np.concatenate((l.left_vertices, lanelets[i].left_vertices), axis=0)
+            right = np.concatenate((l.right_vertices, lanelets[i].right_vertices), axis=0)
+
+            lanelets[id] = Lanelet(left, center, right, l.lanelet_id,
+                                  predecessor=l.predecessor, successor=lanelets[i].successor, adjacent_left=l.adj_left,
+                                  adjacent_left_same_direction=l.adj_left_same_direction, adjacent_right=l.adj_right,
+                                  adjacent_right_same_direction=l.adj_right_same_direction,
+                                  line_marking_left_vertices=l.line_marking_left_vertices,
+                                  line_marking_right_vertices=l.line_marking_right_vertices,
+                                  stop_line=l.stop_line, lanelet_type=l.lanelet_type, user_one_way=l.user_one_way,
+                                  user_bidirectional=l.user_bidirectional, traffic_signs=l.traffic_signs,
+                                  traffic_lights=l.traffic_lights)
+
+            for id_ in lanelets[i].successor:
+
+
+                l = deepcopy(lanelets[id_])
+
+                lanelets[id_] = Lanelet(l.left_vertices, l.center_vertices, l.right_vertices, l.lanelet_id,
+                                      predecessor=[lanelets[id].lanelet_id], successor=l.successor,
+                                      adjacent_left=l.adj_left,
+                                      adjacent_left_same_direction=l.adj_left_same_direction,
+                                      adjacent_right=l.adj_right,
+                                      adjacent_right_same_direction=l.adj_right_same_direction,
+                                      line_marking_left_vertices=l.line_marking_left_vertices,
+                                      line_marking_right_vertices=l.line_marking_right_vertices,
+                                      stop_line=l.stop_line, lanelet_type=l.lanelet_type, user_one_way=l.user_one_way,
+                                      user_bidirectional=l.user_bidirectional, traffic_signs=l.traffic_signs,
+                                      traffic_lights=l.traffic_lights)
+
+            index.append(i)
+
+    for i in index:
+        del lanelets[i]
+
+    network = LaneletNetwork.create_from_lanelet_list(list(lanelets.values()), cleanup_ids=True)
+    scenario.replace_lanelet_network(network)
+
+    return scenario
+
 def remove_outer_lanelets(scenario):
     """remove all lanelelts that do not have a left and right neighbor"""
 
@@ -357,9 +413,6 @@ if __name__ == "__main__":
     # reduce number of points used to represent the lanelet
     scenario = simplify_lanelet_polygons(scenario, 0.05)
 
-    # make sure all successors-predecessor pairs share a common point
-    scenario = connect_successors(scenario)
-
     # remove outer lanelets
     #scenario = remove_outer_lanelets(scenario)
 
@@ -368,6 +421,12 @@ if __name__ == "__main__":
 
     # remove lanelets that do not have a successor or predecessor
     scenario = remove_lanelets_without_successor(scenario)
+
+    # remove short lanelets
+    scenario = remove_short_lanelets(scenario, 3)
+
+    # make sure all successors-predecessor pairs share a common point
+    scenario = connect_successors(scenario)
 
     # remove line markings from the lanelets
     scenario = remove_line_markings(scenario)
@@ -387,6 +446,7 @@ if __name__ == "__main__":
     lanelet = 1
     lanelet = scenario.lanelet_network.find_lanelet_by_position([np.array([76, -48])])[0][0]
     #lanelet = scenario.lanelet_network.find_lanelet_by_position([np.array([185, -195])])[0][0]
+    lanelet = scenario.lanelet_network.find_lanelet_by_position([np.array([0, 170])])[0][0]
 
     for l in scenario.lanelet_network.lanelets:
         if l.lanelet_id == lanelet:
@@ -396,6 +456,8 @@ if __name__ == "__main__":
     #goal_region = GoalRegion([goal_state], lanelets_of_goal_position={0: [9]})
     goal_region = GoalRegion([goal_state], lanelets_of_goal_position=None)
     initial_state = InitialState(position=np.array([-89, 110]), velocity=0, orientation=-np.pi / 2, yaw_rate=0,
+                                 slip_angle=0, time_step=0)
+    initial_state = InitialState(position=np.array([140, 205]), velocity=0, orientation=-np.pi, yaw_rate=0,
                                  slip_angle=0, time_step=0)
     #initial_state = InitialState(position=np.array([396.5, -30]), velocity=0, orientation=np.pi/2, yaw_rate=0, slip_angle=0, time_step=0)
     planning_problem = PlanningProblem(1, initial_state, goal_region)
@@ -409,7 +471,7 @@ if __name__ == "__main__":
         source="CommonRoad Scenario Designer",
         tags={Tag.URBAN},
     )
-    writer.write_to_file(os.path.dirname(os.path.realpath(__file__)) + "/" + "Town01.xml",
+    writer.write_to_file(os.path.dirname(os.path.realpath(__file__)) + "/" + "Town03.xml",
                          OverwriteExistingFile.ALWAYS)
 
 
