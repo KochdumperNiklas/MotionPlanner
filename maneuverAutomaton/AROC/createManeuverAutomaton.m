@@ -41,10 +41,15 @@ R0 = interval(x0-width,x0+width);
 
 % path where the motion primitives are stored
 [path,~,~] = fileparts(which(mfilename));
-path = fullfile(path,'scenarios');
+pathSuccess = fullfile(path,'primitives','success');
+pathFail = fullfile(path,'primitives','fail');
 
-if ~isfolder(path)
-    mkdir(path);
+if ~isfolder(pathSuccess)
+    mkdir(pathSuccess);
+end
+
+if ~isfolder(pathFail)
+    mkdir(pathFail);
 end
 
 % acceleration
@@ -95,9 +100,10 @@ parfor i = 1:length(v)
 
                 o = orientation(k);
                 name = ['primitive_',num2str(i),'_',num2str(j),'_',num2str(k),'.mat'];
-                file = fullfile(path,name);
+                fileSuccess = fullfile(pathSuccess,name);
+                fileFail = fullfile(pathFail,name);
 
-                if ~isfile(file) && (o == 0 || abs(v_init * tFinal_ + 0.5*acc * tFinal_^2) > 0)
+                if ~isfile(fileFail) && ~isfile(fileSuccess) && (o == 0 || abs(v_init * tFinal_ + 0.5*acc * tFinal_^2) > 0)
 
                     % compute the required steering angle to achieve the desired final orientation
                     if o == 0
@@ -112,7 +118,7 @@ parfor i = 1:length(v)
                         x0 = [0;0;v_init;0];
                         u = [acc; steer];
                         tspan = 0:tFinal_/(Opts_.N*Opts_.Ninter):tFinal_;
-                        fun = @(t,x) carKS(x,u,zeros(2,1));
+                        fun = @(t,x) vehicle(x,u,zeros(2,1));
 
                         [t,x] = ode45(fun,tspan,x0);
 
@@ -150,9 +156,10 @@ parfor i = 1:length(v)
 
                         if contains(set,obj.Rfin)
                             disp([name,':     success (acc=',num2str(acc),',steer=',num2str(steer),')']);
-                            parsave(file,'obj');
+                            parsave(fileSuccess,obj);
                         else
                             disp([name,':     failed (acc=',num2str(acc),',steer=',num2str(steer),')']);
+                            parsave(fileFail,obj);
                         end
                     end
                 end
@@ -160,6 +167,31 @@ parfor i = 1:length(v)
         end
     end
 end
+
+% load filed and create maneuver automaton
+files = dir(pathSuccess);
+primitives = {};
+
+for k = 1:length(files)
+    if ~ismember(files(k).name, {'.', '..'})
+        load(fullfile(pathSuccess,files(k).name));
+        primitives{end+1} = obj;
+    end
+end
+
+MA = maneuverAutomaton(primitives,@shiftInitSet,@shiftOccupancySet);
+
+% export maneuver automaton to .xml-file
+file = fullfile(path,'automaton.zip');
+states = {'x','y','velocity','orientation'};
+inputs = {'acceleration','steer'};
+
+if ~isfile(file)
+    exportXML(MA,file,states,inputs);
+end
+
+
+% Auxiliary Functions -----------------------------------------------------
 
 function parsave(fname, obj)
   save(fname, 'obj');
