@@ -19,6 +19,16 @@ HORIZON = 2
 def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space_all, ref_traj, MA):
     """plan a concrete trajectory for the given high-level plan using a maneuver automaton"""
 
+    # check if the maneuver automaton contains occupancy sets for time intervals or time points
+    timepoint = True
+
+    if 'starttime' in MA.primitives[1].occ[0]:
+        timepoint = False
+        space = []
+        for i in range(len(space_all)-1):
+            space.append(space_all[i].intersection(space_all[i+1]))
+        space_all = space
+
     # construct initial state
     x = np.expand_dims(np.array([param['x0'][0], param['x0'][1], param['v_init'], param['orientation']]), 1)
 
@@ -45,11 +55,11 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
         primitive = MA.primitives[node.primitives[-1]]
 
         # check if motion primitive is collision free
-        if collision_check(node, primitive, space_all, param):
+        if collision_check(node, primitive, space_all, param, timepoint):
 
             #print(node.primitives)
 
-            """if len(node.primitives) >= 3:
+            """if len(node.primitives) >= 4:
                 plot_trajectory(node, scenario, plan, ref_traj, param)"""
 
             # fix motion primitive if planning horizon is reached
@@ -77,7 +87,7 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
     return None, None
 
 
-def collision_check(node, primitive, space, param):
+def collision_check(node, primitive, space, param, timepoint):
     """check if a motion primitive is collision free"""
 
     # check if the maximum time is exceeded
@@ -98,7 +108,10 @@ def collision_check(node, primitive, space, param):
 
     # loop over all time steps
     for o in primitive.occ:
-        time = int(o['time']/param['time_step'])
+        if timepoint:
+            time = int(o['time']/param['time_step'])
+        else:
+            time = int(o['starttime']/param['time_step'])
         if ind + time <= param['steps']:
             pgon = affine_transform(o['space'], [np.cos(x[3]), -np.sin(x[3]), np.sin(x[3]), np.cos(x[3]), x[0], x[1]])
             if ind + time < len(space) and not containment_check_robust(space[ind + time], pgon):

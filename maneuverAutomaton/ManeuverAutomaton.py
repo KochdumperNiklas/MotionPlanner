@@ -9,17 +9,21 @@ W = 1.7
 class ManeuverAutomaton:
     """class representing a maneuver automaton"""
 
-    def __init__(self, primitives, v_end, v_diff):
+    def __init__(self, primitives):
 
         self.primitives = primitives
-        self.v_diff = v_diff
+
+        # get maximum velocity and velocity difference
+        v0 = [p.x[2, 0] for p in primitives]
+        v_end = max(v0)
+        self.v_diff = np.sort(np.diff(np.sort(np.unique(v0))))[0]
 
         # construct dictionary mapping velocity to motion primitives
-        vel_dic = [[] for i in range(2*np.ceil(v_end/v_diff).astype(int))]
+        vel_dic = [[] for i in range(2*np.ceil(v_end/self.v_diff).astype(int))]
 
         for i in range(len(primitives)):
             v = primitives[i].x[2, 0]
-            ind = np.round(v/v_diff).astype(int)
+            ind = np.round(v/self.v_diff).astype(int)
             vel_dic[ind].append(i)
 
         self.vel_dic = vel_dic
@@ -37,15 +41,18 @@ class ManeuverAutomaton:
 class MotionPrimitive:
     """class representing a motion primitive"""
 
-    def __init__(self, x, u, tFinal):
+    def __init__(self, x, u, tFinal, successors=None, occupancy=None):
 
-        self.x = x                      # states for the reference trajectory
-        self.u = u                      # control inputs for the reference trajectory
-        self.tFinal = tFinal            # final time for the motion primitive
-        self.successors = []            # list of successor motion primitives
+        self.x = x                          # states for the reference trajectory
+        self.u = u                          # control inputs for the reference trajectory
+        self.tFinal = tFinal                # final time for the motion primitive
+        self.successors = successors        # list of successor motion primitives
 
         # compute occupancy set
-        self.occ = construct_occupancy_set(x, tFinal)
+        if occupancy is None:
+            self.occ = construct_occupancy_set(x, tFinal)
+        else:
+            self.occ = occupancy
 
 
 def construct_occupancy_set(x, tFinal):

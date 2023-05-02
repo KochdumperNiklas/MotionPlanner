@@ -28,7 +28,7 @@ DES_LANE_CHANGE = 20
 # desired acceleration
 A_DES = 1
 
-def highLevelPlanner(scenario, planning_problem, param):
+def highLevelPlanner(scenario, planning_problem, param, priority=False):
     """decide on which lanelets to be at all points in time"""
 
     # extract required information from the planning problem
@@ -47,7 +47,7 @@ def highLevelPlanner(scenario, planning_problem, param):
     ref_traj = velocity2trajectory(vel_prof, param)
 
     # determine best sequence of lanelets to drive on
-    seq = best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, partially_occupied, param)
+    seq = best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, partially_occupied, priority, param)
 
     # refine the plan: decide on which lanelet to be on for all time steps
     plan, space = refine_plan(seq, ref_traj, lanelets, param)
@@ -684,10 +684,11 @@ def reduce_space(space, plan, lanelets, param):
 
     return space
 
-def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, partially_occupied, param):
+def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, partially_occupied, priority, param):
     """determine the best sequences of lanelets to drive on that reach the goal state"""
 
     min_cost = None
+    is_priority = False
 
     # create initial nodes
     queue = []
@@ -706,7 +707,7 @@ def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, partially
         queue.sort(key=lambda i: i.cost)
 
         # remove nodes with costs higher than the current minimum cost for reaching the goal set
-        if min_cost is not None:
+        if min_cost is not None and (not priority or is_priority):
             for i in range(len(queue)):
                 if queue[i].cost > min_cost:
                     queue = queue[:i]
@@ -729,7 +730,9 @@ def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, partially
                                                                  partially_occupied, param)
 
         # check if goal set has been reached
-        for goal in param['goal']:
+        for i in range(len(param['goal'])):
+
+            goal = param['goal'][i]
 
             if goal['lane'] is None or lanelet.lanelet_id == goal['lane']:
 
@@ -741,9 +744,11 @@ def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, partially
 
                 if len(final_sets) > 0:
                     node_temp = expand_node(node, final_sets, drive_area, 'final', ref_traj, change_goal, lanelets)
-                    if min_cost is None or node_temp.cost < min_cost:
+                    if min_cost is None or node_temp.cost < min_cost or (priority and i == 0 and not is_priority):
                         min_cost = node_temp.cost
                         final_node = deepcopy(node_temp)
+                        if i == 0:
+                            is_priority = True
 
         # create child nodes
         for entry in x0:

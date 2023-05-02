@@ -78,7 +78,7 @@ while v_init < v_end:
     v_init = v_init + v_diff
 
 # construct and save maneuver automaton
-MA = ManeuverAutomaton(primitives, v_end, v_diff)
+MA = ManeuverAutomaton(primitives)
 
 filehandler = open(os.path.join('maneuverAutomaton', 'maneuverAutomaton.obj'), 'wb')
 pickle.dump(MA, filehandler)
