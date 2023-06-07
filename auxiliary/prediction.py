@@ -27,7 +27,7 @@ def prediction(vehicles, scenario, horizon, x_ego, most_likely=True):
     for v in vehicles:
 
         # predict x-position of the vehicle under the assumption of constant velocity
-        x = scenario.dt * v['velocity'] * np.linspace(0, horizon)
+        x = scenario.dt * v['velocity'] * np.linspace(0, horizon-1, num=horizon)
 
         # initialize queue with all lanelets corresponding to the initial state of the vehicle
         queue = []
@@ -35,7 +35,11 @@ def prediction(vehicles, scenario, horizon, x_ego, most_likely=True):
                          orientation=v['orientation'], time_step=0)
 
         if most_likely:
-            lanes = scenario.lanelet_network.find_most_likely_lanelet_by_state([x0])
+            try:
+                lanes = scenario.lanelet_network.find_most_likely_lanelet_by_state([x0])
+            except:
+                lanes = scenario.lanelet_network.find_lanelet_by_position([np.array([v['x'], v['y']])])
+                lanes = lanes[0]
         else:
             lanes = scenario.lanelet_network.find_lanelet_by_position([np.array([v['x'], v['y']])])
             lanes = lanes[0]
