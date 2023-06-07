@@ -19,6 +19,7 @@ from src.highLevelPlanner import highLevelPlanner
 from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
 from src.lowLevelPlannerOptimization import lowLevelPlannerOptimization
 from auxiliary.prediction import prediction
+from auxiliary.overlappingLanelets import overlappingLanelets
 
 from commonroad.scenario.lanelet import Lanelet
 from commonroad.scenario.lanelet import LaneletNetwork
@@ -32,6 +33,8 @@ from commonroad.planning.planning_problem import PlanningProblemSet
 from commonroad_route_planner.route_planner import RoutePlanner
 from commonroad_route_planner.utility.visualization import visualize_route
 from commonroad.visualization.util import collect_center_line_colors
+from commonroad.geometry.shape import Rectangle
+from commonroad.scenario.obstacle import DynamicObstacle, ObstacleType
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -52,6 +55,9 @@ MA = pickle.load(filehandler)
 
 # load the CommonRoad scenario
 scenario, planning_problem = CommonRoadFileReader(os.path.join('auxiliary', file)).open()
+
+# determine overlapping lanelets
+overlaps = overlappingLanelets(scenario)
 
 # define planning problem
 #goal_state = CustomState(time_step=Interval(1, 2), position=scenario.lanelet_network.lanelets[1].polygon)
@@ -83,11 +89,20 @@ while lanelet != route.list_ids_lanelets[-1]:
 
     # predict future positions of the surrounding traffic participants
     vehicles = []
-    """vehicles.append({'width': 2, 'length': 5, 'x': 380, 'y': -2, 'velocity': 10, 'orientation': 0})
+    vehicles.append({'width': 2, 'length': 5, 'x': 380, 'y': -2, 'velocity': 10, 'orientation': 0})
     vehicles.append({'width': 2, 'length': 5, 'x': 320, 'y': -2, 'velocity': 10, 'orientation': 0})
-    vehicles.append({'width': 2, 'length': 5, 'x': 396.5, 'y': -40, 'velocity': 10, 'orientation': np.pi / 2})"""
+    vehicles.append({'width': 2, 'length': 5, 'x': 396.5, 'y': -40, 'velocity': 10, 'orientation': np.pi / 2})
 
-    scenario_ = prediction(vehicles, deepcopy(scenario), HORIZON, x0)
+    scenario_ = deepcopy(scenario)
+
+    for v in vehicles:
+        state = CustomState(position=np.array([v['x'], v['y']]), velocity=v['velocity'],
+                            orientation=v['orientation'], time_step=0)
+        shape = Rectangle(width=v['width'], length=v['length'])
+        dynamic_obstacle = DynamicObstacle(scenario.generate_object_id(), ObstacleType.CAR, shape, state)
+        scenario_.add_objects(dynamic_obstacle)
+
+    scenario_ = prediction(scenario_, HORIZON, x0, overlapping_lanelets=overlaps)
 
     # add traffic lights
     state = TrafficLightState('red')

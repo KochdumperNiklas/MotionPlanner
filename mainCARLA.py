@@ -36,6 +36,7 @@ from maneuverAutomaton.ManeuverAutomaton import ManeuverAutomaton
 from src.highLevelPlanner import highLevelPlanner
 from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
 from auxiliary.prediction import prediction
+from auxiliary.overlappingLanelets import overlappingLanelets
 
 from commonroad.scenario.lanelet import Lanelet
 from commonroad.scenario.lanelet import LaneletNetwork
@@ -49,6 +50,8 @@ from commonroad.planning.planning_problem import PlanningProblemSet
 from commonroad_route_planner.route_planner import RoutePlanner
 from commonroad_route_planner.utility.visualization import visualize_route
 from commonroad.visualization.util import collect_center_line_colors
+from commonroad.geometry.shape import Rectangle
+from commonroad.scenario.obstacle import DynamicObstacle, ObstacleType
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -153,6 +156,9 @@ def main():
     # load the CommonRoad scenario
     scenario, planning_problem = CommonRoadFileReader(os.path.join('auxiliary', MAP + '.xml')).open()
 
+    # determine overlapping lanelets
+    overlaps = overlappingLanelets(scenario)
+
     # create random planning problem
     spawn_points = world.get_map().get_spawn_points()
     start = random.choice(spawn_points)
@@ -238,7 +244,8 @@ def main():
                     cnt_time = 0
 
                     # predict the future positions of the other vehicles
-                    vehicles = []
+                    scenario_ = deepcopy(scenario)
+
                     for v in world.get_actors().filter('*vehicle*'):
                         transform = v.get_transform()
                         if (transform.location.x - x0[0])**2 + (-transform.location.y - x0[1])**2 < SENSORRANGE**2 and \
@@ -256,7 +263,14 @@ def main():
                                              'y': -transform.location.y, 'velocity': velocity,
                                              'orientation': -orientation})
 
-                    scenario_ = prediction(vehicles, deepcopy(scenario), HORIZON, x0)
+                            state = CustomState(position=np.array([transform.location.x, transform.location.y]),
+                                                velocity=velocity, orientation=-orientation, time_step=0)
+                            shape = Rectangle(width=width, length=length)
+                            dynamic_obstacle = DynamicObstacle(scenario.generate_object_id(), ObstacleType.CAR, shape,
+                                                               state)
+                            scenario_.add_objects(dynamic_obstacle)
+
+                    scenario_ = prediction(scenario_, HORIZON, x0, overlapping_lanelets=overlaps)
 
                     # consider red traffic lights
                     points_all = []

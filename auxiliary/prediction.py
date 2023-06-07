@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from shapely.geometry import Point
 from shapely.geometry import LineString
 from commonroad.geometry.shape import Rectangle
@@ -9,10 +10,37 @@ from commonroad.scenario.state import CustomState
 from commonroad.scenario.trajectory import Trajectory
 from commonroad.prediction.prediction import TrajectoryPrediction
 
-def prediction(vehicles, scenario, horizon, x_ego, most_likely=True):
+from auxiliary.overlappingLanelets import overlappingLanelets
+
+def prediction(scenario, horizon, x_ego, overlapping_lanelets=None, most_likely=True):
     """predict the future positions of the surrounding vehicles"""
 
     trajectories = []
+
+    # determine lanelets that overlap
+    if overlapping_lanelets is None:
+        overlapping_lanelets = overlappingLanelets(scenario)
+
+    # create dictionary that maps a lanelet ID to the corresponding lanelet
+    ids = [l.lanelet_id for l in scenario.lanelet_network.lanelets]
+    lanelets = dict(zip(ids, scenario.lanelet_network.lanelets))
+
+    # extract the initial positions for all vehicles
+    vehicles = []
+
+    for obs in scenario.dynamic_obstacles:
+        s = obs.initial_state
+        r = obs.obstacle_shape
+        if hasattr(s, 'acceleration'):
+            acc = s.acceleration
+        else:
+            acc = 0
+        vehicles.append({'width': r.width, 'length': r.length, 'x': s.position[0], 'y': s.position[1],
+                         'velocity': s.velocity, 'orientation': s.orientation, 'acceleration': acc, 'obj': obs})
+
+    # delete all dynamic obstacles
+    for v in vehicles:
+        scenario.remove_obstacle(v['obj'])
 
     # find all possible lanelets for the ego-vehicle
     lanes_ego = scenario.lanelet_network.find_lanelet_by_position([x_ego[0:2]])
@@ -20,14 +48,28 @@ def prediction(vehicles, scenario, horizon, x_ego, most_likely=True):
 
     dist_ego = []
     for lane in lanes_ego:
-        l = scenario.lanelet_network.find_lanelet_by_id(lane)
+        l = lanelets[lane]
         dist_ego.append(distance_on_lanelet(l, x_ego[0], x_ego[1]))
+
+    # compute maximum distance that can be travelled by the ego vehicle
+    r_ego = x_ego[2] * scenario.dt * horizon + 0.5 * 9 * (scenario.dt * horizon)**2
 
     # loop over all surrounding vehicles
     for v in vehicles:
 
         # predict x-position of the vehicle under the assumption of constant velocity
-        x = scenario.dt * v['velocity'] * np.linspace(0, horizon-1, num=horizon)
+        vel = v['velocity'] + scenario.dt * v['acceleration'] * np.linspace(0, horizon-1, num=horizon)
+        x = np.zeros((len(vel)))
+
+        for i in range(len(vel)-1):
+            if vel[i] > 0:
+                x[i+1] = x[i] + vel[i]*scenario.dt * 0.5*v['acceleration']*scenario.dt**2
+            else:
+                x[i+1] = x[i]
+
+        # check if the vehicle can potentially intervene with the ego vehicle
+        if np.sqrt((v['x'] - x_ego[0])**2 + (v['y'] - x_ego[1])**2) > r_ego + x[-1]:
+            continue
 
         # initialize queue with all lanelets corresponding to the initial state of the vehicle
         queue = []
@@ -35,26 +77,23 @@ def prediction(vehicles, scenario, horizon, x_ego, most_likely=True):
                          orientation=v['orientation'], time_step=0)
 
         if most_likely:
-            try:
-                lanes = scenario.lanelet_network.find_most_likely_lanelet_by_state([x0])
-            except:
-                lanes = scenario.lanelet_network.find_lanelet_by_position([np.array([v['x'], v['y']])])
-                lanes = lanes[0]
+            lanes = scenario.lanelet_network.find_most_likely_lanelet_by_state([x0])
         else:
             lanes = scenario.lanelet_network.find_lanelet_by_position([np.array([v['x'], v['y']])])
             lanes = lanes[0]
 
         for lane in lanes:
-            l = scenario.lanelet_network.find_lanelet_by_id(lane)
+            l = lanelets[lane]
             dist = distance_on_lanelet(l, v['x'], v['y'])
-            queue.append({'states': [x0], 'dist': -dist, 'lanelet': l.lanelet_id})
+            queue.append({'states': [x0], 'dist': -dist, 'lanelets': [l.lanelet_id], 'lanelet': l.lanelet_id})
 
         # loop until queue is empty
         while len(queue) > 0:
 
             node = queue.pop(0)
-            l = scenario.lanelet_network.find_lanelet_by_id(node['lanelet'])
+            l = lanelets[node['lanelet']]
             states = deepcopy(node['states'])
+            lanes = deepcopy(node['lanelets'])
 
             # loop over all time steps
             for i in range(len(node['states']), horizon):
@@ -70,13 +109,13 @@ def prediction(vehicles, scenario, horizon, x_ego, most_likely=True):
                         break
 
                 if abort:
-                    trajectories.append({'trajectory': deepcopy(states), 'vehicle': v})
+                    trajectories.append({'trajectory': deepcopy(states), 'lanelets': deepcopy(lanes), 'vehicle': v})
                     break
 
                 # create child nodes from the successor lanelets
                 if dist > l.distance[-1]:
                     for s in l.successor:
-                        queue.append({'states': states, 'dist': node['dist'] + l.distance[-1], 'lanelet': s})
+                        queue.append({'states': states, 'dist': node['dist'] + l.distance[-1], 'lanelets': lanes, 'lanelet': s})
                     break
 
                 # compute states along the current lanelet
@@ -88,24 +127,42 @@ def prediction(vehicles, scenario, horizon, x_ego, most_likely=True):
                             phi = np.arctan2(d[1], d[0])
                             pos = l.center_vertices[j, :] + d * (dist - l.distance[j])
                             states.append(CustomState(position=pos, velocity=v['velocity'], orientation=phi, time_step=i))
+                            lanes.append(l.lanelet_id)
                             break
 
                 # check if trajectory length reached horizon -> finished
                 if i == horizon - 1:
-                    trajectories.append({'trajectory': deepcopy(states), 'vehicle': v})
+                    trajectories.append({'trajectory': deepcopy(states), 'lanelets': deepcopy(lanes), 'vehicle': v})
 
     # add all trajectories to the CommonRoad traffic scenario
     for traj in trajectories:
 
         t = traj['trajectory']
         v = traj['vehicle']
+        l = traj['lanelets']
 
         # create the trajectory of the obstacle, starting at time step 0
         dynamic_obstacle_trajectory = Trajectory(0, t)
 
-        # create the prediction using the trajectory and the shape of the obstacle
+        # determine lanelets intersected by the vehicle shape
         dynamic_obstacle_shape = Rectangle(width=v['width'], length=v['length'])
-        dynamic_obstacle_prediction = TrajectoryPrediction(dynamic_obstacle_trajectory, dynamic_obstacle_shape)
+        shape_lanelet_assign = {}
+
+        for i in range(len(t)):
+            shape_lanelet_assign[i] = {l[i]}
+            shape = dynamic_obstacle_shape.rotate_translate_local(t[i].position, t[i].orientation)
+            if lanelets[l[i]].polygon.shapely_object.contains(shape.shapely_object):
+                for o in overlapping_lanelets[l[i]]:
+                    if lanelets[o].polygon.shapely_object.intersects(shape.shapely_object):
+                        shape_lanelet_assign[i].add(o)
+            else:
+                lanes = scenario.lanelet_network.find_lanelet_by_shape(shape)
+                for lane in lanes:
+                    shape_lanelet_assign[i].add(lane)
+
+        # create the prediction using the trajectory and the shape of the obstacle
+        dynamic_obstacle_prediction = TrajectoryPrediction(dynamic_obstacle_trajectory, dynamic_obstacle_shape,
+                                                           shape_lanelet_assignment=shape_lanelet_assign)
 
         # generate the dynamic obstacle according to the specification
         dynamic_obstacle_id = scenario.generate_object_id()
