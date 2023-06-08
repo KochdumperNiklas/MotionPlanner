@@ -379,62 +379,86 @@ def free_space_lanelet(lanelets, scenario, speed_limit, param):
     occupied_space = dict(zip(lanelets.keys(), deepcopy(tmp)))
     partially_occupied = dict(zip(lanelets.keys(), deepcopy(tmp)))
 
-    # loop over all lanelets and compute occupied space
-    for id in lanelets.keys():
+    # loop over all obstacles
+    for obs in obstacles:
 
-        l = lanelets[id]
-        d_min = l.distance[0]
-        d_max = l.distance[-1]
+        # distinguish static and dynamic obstacles
+        if isinstance(obs, StaticObstacle):
 
-        # loop over all obstacles
-        for obs in obstacles:
+            # determine lanelets that are affected by the obstacle
+            pgon = get_shapely_object(obs.obstacle_shape)
 
-            # distinguish static and dynamic obstacles
-            if isinstance(obs, StaticObstacle):
-
-                pgon = get_shapely_object(obs.obstacle_shape)
-
-                # check if static obstacle intersects the lanelet
-                if intersects_lanelet(l, pgon):
-
-                    # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
-                    dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon)
-                    offset = 0.5 * param['length_max'] + DIST_SAFE
-
-                    # loop over all time steps
-                    for i in range(param['steps']+1):
-                        space = (max(d_min, dist_min - offset), min(d_max, dist_max + offset))
-                        occupied_space[id][i].append({'space': space, 'width': (y_min, y_max)})
-
-                    # check if occupied space extends to predecessor lanelet
-                    if dist_min - offset < 0:
-                        for ind in l.predecessor:
-                            for i in range(param['steps']+1):
-                                d = lanelets[ind].distance[-1]
-                                space = (d + dist_min - offset, d)
-                                occupied_space[ind][i].append({'space': space, 'width': (y_min, y_max)})
-
-                    # check if occupied space extends to successor lanelet
-                    if dist_max + offset > l.distance[-1]:
-                        for ind in l.successor:
-                            for i in range(param['steps']+1):
-                                d = dist_max + offset - l.distance[-1]
-                                occupied_space[ind][i].append({space: (0, d), 'width': (y_min, y_max)})
-
+            if obs.initial_shape_lanelet_ids is None:
+                intersecting_lanes = set()
+                for id in lanelets.keys():
+                    if intersects_lanelet(lanelets[id], pgon):
+                        intersecting_lanes.add(id)
             else:
+                intersecting_lanes = obs.initial_shape_lanelet_ids
+
+            # loop over all affected lanelets
+            for id in intersecting_lanes:
+
+                l = lanelets[id]
+                d_min = l.distance[0]
+                d_max = l.distance[-1]
+
+                # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
+                dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon)
+                offset = 0.5 * param['length_max'] + DIST_SAFE
 
                 # loop over all time steps
+                for i in range(param['steps'] + 1):
+                    space = (max(d_min, dist_min - offset), min(d_max, dist_max + offset))
+                    occupied_space[id][i].append({'space': space, 'width': (y_min, y_max)})
+
+                # check if occupied space extends to predecessor lanelet
+                if dist_min - offset < 0:
+                    for ind in l.predecessor:
+                        for i in range(param['steps'] + 1):
+                            d = lanelets[ind].distance[-1]
+                            space = (d + dist_min - offset, d)
+                            occupied_space[ind][i].append({'space': space, 'width': (y_min, y_max)})
+
+                # check if occupied space extends to successor lanelet
+                if dist_max + offset > l.distance[-1]:
+                    for ind in l.successor:
+                        for i in range(param['steps'] + 1):
+                            d = dist_max + offset - l.distance[-1]
+                            occupied_space[ind][i].append({space: (0, d), 'width': (y_min, y_max)})
+
+        else:
+
+            # determine lanelets that are affected by the obstacle
+            if obs.prediction.shape_lanelet_assignment is None:
+                intersecting_lanes = {}
                 for o in obs.prediction.occupancy_set:
+                    intersecting_lanes[o.time_step] = set()
+                    pgon = get_shapely_object(o.shape)
+                    for id in lanelets.keys():
+                        if intersects_lanelet(lanelets[id], pgon):
+                            intersecting_lanes[o.time_step].add(id)
+            else:
+                intersecting_lanes = obs.prediction.shape_lanelet_assignment
+
+            # loop over all time steps
+            for o in obs.prediction.occupancy_set:
+
+                if o.time_step < param['steps'] + 1:
 
                     pgon = get_shapely_object(o.shape)
 
-                    # check if dynamic obstacles occupancy set intersects the lanelet
-                    if intersects_lanelet(l, pgon) and o.time_step < len(occupied_space[id]):
+                    # loop over all affected lanelets
+                    for id in intersecting_lanes[o.time_step]:
+
+                        l = lanelets[id]
+                        d_min = l.distance[0]
+                        d_max = l.distance[-1]
 
                         # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
                         dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon)
-                        offset = 0.5*param['length_max'] + DIST_SAFE
-                        space = (max(d_min, dist_min-offset), min(d_max, dist_max+offset))
+                        offset = 0.5 * param['length_max'] + DIST_SAFE
+                        space = (max(d_min, dist_min - offset), min(d_max, dist_max + offset))
                         occupied_space[id][o.time_step].append({'space': space, 'width': (y_min, y_max)})
 
                         # check if occupied space extends to predecessor lanelet
