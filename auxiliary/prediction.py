@@ -63,7 +63,7 @@ def prediction(scenario, horizon, x_ego, overlapping_lanelets=None, most_likely=
 
         for i in range(len(vel)-1):
             if vel[i] > 0:
-                x[i+1] = x[i] + vel[i]*scenario.dt * 0.5*v['acceleration']*scenario.dt**2
+                x[i+1] = x[i] + vel[i]*scenario.dt + 0.5*v['acceleration']*scenario.dt**2
             else:
                 x[i+1] = x[i]
 
