@@ -180,7 +180,40 @@ def initialization(scenario, planning_problem, param):
         else:
             speed_limit[id] = None
 
+        """if get_lanelet_curvature(lanelets[id]) > 0.1 and id not in param['x0_lane']:
+            if speed_limit[id] is None:
+                speed_limit[id] = 10
+            else:
+                speed_limit[id] = np.minimum(speed_limit[id], 10)"""
+
     return param, lanelets, speed_limit
+
+def get_lanelet_curvature(lanelet):
+    """compute the maximum change in curvature along the lanelet"""
+
+    # compute orientation
+    traj = lanelet.center_vertices.T
+    orientation = []
+
+    for i in range(traj.shape[1] - 1):
+        diff = traj[:, i + 1] - traj[:, i]
+        orientation.append(np.arctan2(diff[1], diff[0]))
+
+    # avoid jumps by 2*pi
+    for i in range(len(orientation) - 1):
+        n = round(abs(orientation[i + 1] - orientation[i]) / (2 * np.pi))
+        if orientation[i + 1] - orientation[i] > 3:
+            orientation[i + 1] = orientation[i + 1] - n * 2 * np.pi
+        elif orientation[i] - orientation[i + 1] > 3:
+            orientation[i + 1] = orientation[i + 1] + n * 2 * np.pi
+
+    # compute change in orientation over the distance
+    if len(orientation) > 1:
+        delta = np.diff(np.asarray(orientation)) / np.diff(lanelet.distance[:-1])
+    else:
+        delta = 0.0
+
+    return np.max(np.abs(delta))
 
 def get_shapely_object(set):
     """construct the shapely polygon object for the given CommonRoad set"""
