@@ -856,8 +856,10 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_oc
             for sp in free_space[suc][i+1]:
                 if space_.intersects(sp):
                     space_prev_ = translate(space_prev, -lanelet.distance[len(lanelet.distance) - 1], 0)
-                    successors = add_transition(successors, sp.intersection(space_prev_), i + 1, suc, param)
-                    successor_possible_ = True
+                    tmp = sp.intersection(space_prev_)
+                    if tmp.area > 0:
+                        successors = add_transition(successors, tmp, i + 1, suc, param)
+                        successor_possible_ = True
 
         successor_possible = successor_possible_
 
