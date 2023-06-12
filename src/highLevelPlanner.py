@@ -32,10 +32,10 @@ def highLevelPlanner(scenario, planning_problem, param, priority=False):
     """decide on which lanelets to be at all points in time"""
 
     # extract required information from the planning problem
-    param, lanelets, speed_limit = initialization(scenario, planning_problem, param)
+    param, lanelets, speed_limit, dist_init = initialization(scenario, planning_problem, param)
 
     # compute free space on each lanelet for each time step
-    free_space, partially_occupied = free_space_lanelet(lanelets, scenario, speed_limit, param)
+    free_space, partially_occupied = free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param)
 
     # compute distance to goal lanelet and number of required lane changes for each lanelet
     change_goal, dist_goal = distance2goal(lanelets, param)
@@ -165,8 +165,12 @@ def initialization(scenario, planning_problem, param):
 
             param['goal'].append(deepcopy(param_))
 
+    # determine distance from initial point for each lanelet
+    dist_init = distance2init(lanelets, param)
+
     # determine the speed limit for each lanelet
     speed_limit = {}
+    t = np.maximum((param['v_init'] - 10) / param['a_max'], 0)
 
     for id in lanelets.keys():
         limits = []
@@ -180,13 +184,14 @@ def initialization(scenario, planning_problem, param):
         else:
             speed_limit[id] = None
 
-        """if get_lanelet_curvature(lanelets[id]) > 0.1 and id not in param['x0_lane']:
+        if get_lanelet_curvature(lanelets[id]) > 0.1 and id not in param['x0_lane'] and \
+                param['v_init'] * t - 0.5*param['a_max']*t**2 < dist_init[id]:
             if speed_limit[id] is None:
                 speed_limit[id] = 10
             else:
-                speed_limit[id] = np.minimum(speed_limit[id], 10)"""
+                speed_limit[id] = np.minimum(speed_limit[id], 10)
 
-    return param, lanelets, speed_limit
+    return param, lanelets, speed_limit, dist_init
 
 def get_lanelet_curvature(lanelet):
     """compute the maximum change in curvature along the lanelet"""
@@ -318,6 +323,55 @@ def distance2goal(lanelets, param):
 
     return change_all, dist_all
 
+def distance2init(lanelets, param):
+    """compute the distance from the initial point for each lanelet"""
+
+    # initialize distance to goal lanelet
+    dist = {}
+    queue = []
+
+    for i in range(len(param['x0_lane'])):
+        dist[param['x0_lane'][i]] = -param['x0_set'][i]
+        queue.append(param['x0_lane'][i])
+
+    # loop until distances for all lanelets have been assigned
+    while len(queue) > 0:
+
+        q = queue.pop(0)
+        lanelet = lanelets[q]
+
+        for s in lanelet.successor:
+            tmp = dist[q] + lanelet.distance[-1]
+            if not s in dist.keys():
+                dist[s] = tmp
+                queue.append(s)
+            elif tmp < dist[s]:
+                dist[s] = tmp
+                queue.append(s)
+
+        if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
+            if not lanelet.adj_left in dist.keys():
+                dist[lanelet.adj_left] = dist[q]
+                queue.append(lanelet.adj_left)
+            elif dist[q] < dist[lanelet.adj_left]:
+                dist[lanelet.adj_left] = dist[q]
+                queue.append(lanelet.adj_left)
+
+        if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
+            if not lanelet.adj_right in dist.keys():
+                dist[lanelet.adj_right] = dist[q]
+                queue.append(lanelet.adj_right)
+            elif dist[q] < dist[lanelet.adj_right]:
+                dist[lanelet.adj_right] = dist[q]
+                queue.append(lanelet.adj_right)
+
+    # add costs for lanelet from which it is impossible to reach the goal set
+    for l in lanelets.keys():
+        if l not in dist.keys():
+            dist[l] = np.inf
+
+    return dist
+
 def velocity_profile(dist, speed_limit, param):
     """compute the desired velocity profile over time"""
 
@@ -403,7 +457,7 @@ def velocity_profile_single(dist, vel_des, x0_ind, goal, param):
 
     return vel
 
-def free_space_lanelet(lanelets, scenario, speed_limit, param):
+def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
     """compute free space on each lanelet for all time steps"""
 
     obstacles = scenario.obstacles
@@ -623,30 +677,39 @@ def free_space_lanelet(lanelets, scenario, speed_limit, param):
         for i in range(0, param['steps']):
             status = collect_center_line_colors(scenario.lanelet_network, scenario.lanelet_network.traffic_lights, i)
             for l in status.keys():
-                if status[l].value == 'red':
-                    if not l in param['x0_lane']:
+                if status[l].value == 'red' or status[l].value == 'yellow' or status[l].value == 'red_yellow':
+
+                    # check if car is already on intersection or cannot stop in front of lanelet anymore
+                    t = param['v_init'] / param['a_max']
+                    dist_break = param['v_init']*t - 0.5 * param['a_max']*t**2 + 0.5 * param['length_max'] + 0.2
+
+                    if l not in param['x0_lane'] and dist_init[l] > dist_break:
+
+                        # remove free space on lanelets influenced by the traffic light
                         free_space_all[l][i] = []
-                    for s in lanelets[l].predecessor:
-                        pgon = interval2polygon([lanelets[s].distance[-1] - 0.5 * param['length_max'], -1000],
-                                                [lanelets[s].distance[-1], 1000])
-                        is_init = False
-                        if s in param['x0_lane']:
-                            for j in range(len(param['x0_lane'])):
-                                if param['x0_lane'] == s:
-                                    x0 = param['x0_set']
-                                    if pgon.bounds[0] < x0 < pgon.bounds[2]:
-                                        is_init = True
-                                    break
-                        if not is_init:
-                            cnt = len(free_space_all[s][i])
-                            for j in range(len(free_space_all[s][i])-1, -1, -1):
-                                if free_space_all[s][i][j].intersects(pgon):
-                                    if pgon.contains(free_space_all[s][i][j]):
-                                        cnt = j
-                                    else:
-                                        free_space_all[s][i][j] = free_space_all[s][i][j].difference(pgon)
+
+                        # remove space from predecessor lanelets to make sure the car stops before the stopline
+                        for s in lanelets[l].predecessor:
+                            pgon = interval2polygon([lanelets[s].distance[-1] - 0.5 * param['length_max'], -1000],
+                                                    [lanelets[s].distance[-1], 1000])
+                            is_init = False
+                            if s in param['x0_lane']:
+                                for j in range(len(param['x0_lane'])):
+                                    if param['x0_lane'] == s:
+                                        x0 = param['x0_set']
+                                        if pgon.bounds[0] < x0 < pgon.bounds[2]:
+                                            is_init = True
                                         break
-                            free_space_all[s][i] = free_space_all[s][i][0:cnt]
+                            if not is_init:
+                                cnt = len(free_space_all[s][i])
+                                for j in range(len(free_space_all[s][i])-1, -1, -1):
+                                    if free_space_all[s][i][j].intersects(pgon):
+                                        if pgon.contains(free_space_all[s][i][j]):
+                                            cnt = j
+                                        else:
+                                            free_space_all[s][i][j] = free_space_all[s][i][j].difference(pgon)
+                                            break
+                                free_space_all[s][i] = free_space_all[s][i][0:cnt]
 
     return free_space_all, partially_occupied
 
