@@ -1462,6 +1462,10 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, param, lanelets)
                     center_traj[j][i] = np.transpose(p)
                     break
 
+    # correct the center trajectory to avoid collisions with lanelet boundaries for lanelets with high curvature
+    for j in range(len(center_traj)):
+        center_traj[j] = correct_centerline(center_traj[j], lanelets[lanes[j]], param)
+
     # store reference trajectory (without considering lane changes)
     ref_traj = np.zeros((2, len(plan)))
     cnt = 0
@@ -1494,6 +1498,43 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, param, lanelets)
 
     return ref_traj, plan
 
+def correct_centerline(traj, lanelet, param):
+    """correct the centerline (since middle is often not the best line for collision avoidance)"""
+
+    # find start and end index
+    index = [i for i in range(len(traj)) if len(traj[i]) > 0]
+
+    # compute orientation
+    orientation = np.zeros((len(index, )))
+
+    for i in range(len(index)):
+        if i == 0:
+            diff = traj[index[i + 1]] - traj[index[i]]
+            orientation[i] = np.arctan2(diff[1], diff[0])
+        elif i == len(index)-1:
+            diff = traj[index[i]] - traj[index[i-1]]
+            orientation[i] = np.arctan2(diff[1], diff[0])
+        else:
+            diff1 = traj[index[i + 1]] - traj[index[i]]
+            diff2 = traj[index[i]] - traj[index[i-1]]
+            orientation[i] = 0.5*(np.arctan2(diff1[1], diff1[0]) + np.arctan2(diff2[1], diff2[0]))
+
+    # transform center line
+    car = interval2polygon([-param['length']/2, -100], [param['length']/2, 100])
+    left_bound = LineString(lanelet.left_vertices)
+    right_bound = LineString(lanelet.right_vertices)
+
+    for i in range(len(index)):
+        phi = orientation[i]
+        pgon = affine_transform(car, [np.cos(phi), -np.sin(phi), np.sin(phi), np.cos(phi), traj[index[i]][0], traj[index[i]][1]])
+        int_left = translate(pgon.intersection(left_bound), -traj[index[i]][0], -traj[index[i]][1])
+        int_right = translate(pgon.intersection(right_bound), -traj[index[i]][0], -traj[index[i]][1])
+        ub = min(-np.sin(phi) * np.asarray(int_left.coords.xy[0]) + np.cos(phi) * np.asarray(int_left.coords.xy[1]))
+        lb = max(-np.sin(phi) * np.asarray(int_right.coords.xy[0]) + np.cos(phi) * np.asarray(int_right.coords.xy[1]))
+        traj[index[i]] = traj[index[i]] + np.array([-np.sin(phi), np.cos(phi)]) * 0.5*(lb + ub)
+
+    return traj
+
 def trajectory_position_velocity(space, plan, vel_prof, lanelets, param):
     """compute the desired space-velocity trajectory"""
 
@@ -1501,7 +1542,7 @@ def trajectory_position_velocity(space, plan, vel_prof, lanelets, param):
     dt = param['time_step']
     a_max = param['a_max']
 
-    v = np.asarray(vel_prof)
+    v = np.asarray(vel_prof[:len(plan)])
     x = np.zeros(v.shape)
 
     for i in range(len(param['x0_lane'])):
