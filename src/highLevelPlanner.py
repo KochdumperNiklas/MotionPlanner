@@ -11,6 +11,7 @@ from copy import deepcopy
 from commonroad.scenario.obstacle import StaticObstacle
 from commonroad.geometry.shape import ShapeGroup
 from commonroad.visualization.util import collect_center_line_colors
+from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 
 # weighting factors for the cost function
 W_LANE_CHANGE = 1000
@@ -171,18 +172,10 @@ def initialization(scenario, planning_problem, param):
     # determine the speed limit for each lanelet
     speed_limit = {}
     t = np.maximum((param['v_init'] - 10) / param['a_max'], 0)
+    interpreter = TrafficSigInterpreter(scenario.scenario_id.country_name, scenario.lanelet_network)
 
     for id in lanelets.keys():
-        limits = []
-        for sign_id in lanelets[id].traffic_signs:
-            sign = scenario.lanelet_network.find_traffic_sign_by_id(sign_id)
-            for elem in sign.traffic_sign_elements:
-                if elem.traffic_sign_element_id.name == "MAX_SPEED":
-                    limits.append(float(elem.additional_values[0]))
-        if len(limits) > 0:
-            speed_limit[id] = min(limits)
-        else:
-            speed_limit[id] = None
+        speed_limit[id] = interpreter.speed_limit(frozenset([id]))
 
         if get_lanelet_curvature(lanelets[id]) > 0.1 and id not in param['x0_lane'] and \
                 param['v_init'] * t - 0.5*param['a_max']*t**2 < dist_init[id]:
