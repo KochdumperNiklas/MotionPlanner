@@ -171,31 +171,40 @@ def initialization(scenario, planning_problem, param):
 
     # determine the speed limit for each lanelet
     speed_limit = {}
-    t = np.maximum((param['v_init'] - 10) / param['a_max'], 0)
     interpreter = TrafficSigInterpreter(scenario.scenario_id.country_name, scenario.lanelet_network)
 
     for id in lanelets.keys():
         speed_limit[id] = interpreter.speed_limit(frozenset([id]))
 
-        if get_lanelet_curvature(lanelets[id]) > 0.1 and id not in param['x0_lane'] and \
-                param['v_init'] * t - 0.5*param['a_max']*t**2 < dist_init[id]:
+        limit = speed_limit_dynamics(lanelets[id], param)
+        t = np.maximum((param['v_init'] - limit) / param['a_max'], 0)
+
+        if id not in param['x0_lane'] and param['v_init'] * t - 0.5*param['a_max']*t**2 < dist_init[id]:
             if speed_limit[id] is None:
-                speed_limit[id] = 10
+                speed_limit[id] = limit
             else:
-                speed_limit[id] = np.minimum(speed_limit[id], 10)
+                speed_limit[id] = np.minimum(speed_limit[id], limit)
 
     return param, lanelets, speed_limit, dist_init
 
-def get_lanelet_curvature(lanelet):
-    """compute the maximum change in curvature along the lanelet"""
+def speed_limit_dynamics(lanelet, param):
+    """compute maximum speed for a lanelet based on kinematic constraints (Kamm's circle)"""
 
     # compute orientation
     traj = lanelet.center_vertices.T
-    orientation = []
+    orientation = np.zeros((traj.shape[1], ))
 
-    for i in range(traj.shape[1] - 1):
-        diff = traj[:, i + 1] - traj[:, i]
-        orientation.append(np.arctan2(diff[1], diff[0]))
+    for i in range(len(orientation)):
+        if i == 0:
+            diff = traj[:, i + 1] - traj[:, i]
+            orientation[i] = np.arctan2(diff[1], diff[0])
+        elif i == len(orientation) - 1:
+            diff = traj[:, i] - traj[:, i - 1]
+            orientation[i] = np.arctan2(diff[1], diff[0])
+        else:
+            diff1 = traj[:, i + 1] - traj[:, i]
+            diff2 = traj[:, i] - traj[:, i - 1]
+            orientation[i] = 0.5 * (np.arctan2(diff1[1], diff1[0]) + np.arctan2(diff2[1], diff2[0]))
 
     # avoid jumps by 2*pi
     for i in range(len(orientation) - 1):
@@ -205,13 +214,12 @@ def get_lanelet_curvature(lanelet):
         elif orientation[i] - orientation[i + 1] > 3:
             orientation[i + 1] = orientation[i + 1] + n * 2 * np.pi
 
-    # compute change in orientation over the distance
-    if len(orientation) > 1:
-        delta = np.diff(np.asarray(orientation)) / np.diff(lanelet.distance[:-1])
-    else:
-        delta = 0.0
+    # compute maximum velocity to not violate Kamm's circle constraint at 0 acceleration
+    dx = np.diff(lanelet.distance)
+    dphi = np.diff(orientation)
+    v = np.sqrt(np.abs(param['a_max'] * dx/dphi))
 
-    return np.max(np.abs(delta))
+    return np.mean(v)
 
 def get_shapely_object(set):
     """construct the shapely polygon object for the given CommonRoad set"""
