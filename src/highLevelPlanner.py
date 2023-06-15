@@ -15,7 +15,7 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 
 # weighting factors for the cost function
 W_LANE_CHANGE = 1000
-W_DIST = 1
+W_VEL = 1
 W_SAFE_DIST = 10
 
 # safety distance to other cars
@@ -569,19 +569,20 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
 
                         # compute occupied space if the safe distance is respected
                         offset_safe = 0.5 * param['length_max'] + np.maximum(v[o.time_step], 2)
-                        space = (max(d_min, dist_min - offset_safe), min(d_max, dist_max + offset_safe))
+                        space = (dist_min - offset_safe, dist_max + offset_safe)
                         occupied_dist[id][o.time_step].append(space)
 
                         if dist_min - offset_safe < 0:
                             for ind in l.predecessor:
                                 d = lanelets[ind].distance[-1]
-                                space = (d + dist_min - offset_safe, d)
+                                space = (dist_min - offset_safe + d, dist_max + offset_safe + d)
                                 occupied_dist[ind][o.time_step].append(space)
 
                         if dist_max + offset_safe > l.distance[-1]:
                             for ind in l.successor:
-                                d = dist_max + offset_safe - l.distance[-1]
-                                occupied_dist[ind][o.time_step].append((0, d))
+                                d = l.distance[-1]
+                                space = (dist_min - offset_safe - d, dist_max + offset_safe - d)
+                                occupied_dist[ind][o.time_step].append(space)
 
     # unite occupied spaces that belong to the same time
     for id in lanelets.keys():
@@ -734,7 +735,7 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                                 free_space_all[s][i] = free_space_all[s][i][0:cnt]
 
     # compute areas in which a safe distance to the surrounding traffic participants is satisfied
-    safe_dist = area_safe_distance(free_space_all, occupied_dist, lanelets)
+    safe_dist = area_safe_distance(free_space_all, occupied_dist)
 
     return free_space_all, partially_occupied, safe_dist
 
@@ -803,7 +804,7 @@ def obstacle_velocity(obs, param):
 
     return v
 
-def area_safe_distance(free_space, occupied_space, lanelets):
+def area_safe_distance(free_space, occupied_space):
     """compute the areas in which the safe distance constraint is satisfied"""
 
     safe_dist = deepcopy(free_space)
@@ -812,16 +813,16 @@ def area_safe_distance(free_space, occupied_space, lanelets):
         for j in range(len(free_space[i])):
             for k in range(len(free_space[i][j])):
                 f = free_space[i][j][k]
-                safe_dist[i][j][k] = {'l': f.bounds[0], 'u': f.bounds[2], 'l_safe': f.bounds[0], 'u_safe': f.bounds[2]}
+                obs_right = f.bounds[2]
+                obs_left = f.bounds[0]
                 for o in occupied_space[i][j]:
                     if intersects_interval(o, (f.bounds[0], f.bounds[2])):
-                        if f.bounds[0] < o[0]:
-                            safe_dist[i][j][k]['u_safe'] = np.minimum(safe_dist[i][j][k]['u_safe'], o[0])
-                        elif f.bounds[2] > o[1]:
-                            safe_dist[i][j][k]['l_safe'] = np.maximum(safe_dist[i][j][k]['l_safe'], o[1])
+                        if 0.5*(o[0] + o[1]) < f.bounds[0]:
+                            obs_left = np.maximum(obs_left, o[1])
                         else:
-                            safe_dist[i][j][k]['l_safe'] = np.maximum(safe_dist[i][j][k]['l_safe'], np.minimum(o[1], f.bounds[2]))
-                            safe_dist[i][j][k]['u_safe'] = np.minimum(safe_dist[i][j][k]['u_safe'], np.maximum(o[0], f.bounds[0]))
+                            obs_right = np.minimum(obs_right, o[0])
+
+                safe_dist[i][j][k] = {'l': f.bounds[0], 'u': f.bounds[2], 'l_safe': obs_left, 'u_safe': obs_right}
 
     return safe_dist
 
@@ -848,6 +849,8 @@ def safe_distance_violation(space, safe_distance):
         if entry['l'] <= l and entry['u'] >= u:
             l_safe = entry['l_safe']
             u_safe = entry['u_safe']
+            l_ = entry['l']
+            u_ = entry['u']
             break
 
     # compute violation
@@ -859,8 +862,17 @@ def safe_distance_violation(space, safe_distance):
             val = min([abs(l-l_safe), abs(l-u_safe), abs(u-l_safe), abs(u-u_safe)])
 
     else:                           # not possible to satisfy the safe distance constraint
-        m = 0.5*(l_safe + u_safe)
-        dist = abs(l_safe - m)
+
+        if l_safe < l_ and u_safe > u_:
+            m = 0.5*(l_safe + u_safe)
+            dist = abs(l_safe - m)
+        elif l_safe < l_:
+            m = l_
+            dist = abs(l_safe - m)
+        else:
+            m = u_
+            dist = abs(u_safe - m)
+
         if l <= m <= u:
             val = dist
         else:
@@ -1724,7 +1736,7 @@ def cost_reference_trajectory(ref_traj, area, offset, safe_dist):
     viol = safe_distance_violation(area['space'], safe_dist[area['step']])
 
     # compute overall cost
-    return W_DIST * dist + W_SAFE_DIST * viol
+    return W_VEL * dist + W_SAFE_DIST * viol
 
 def offsets_lanelet_sequence(seq, lanelets):
     """determine shift in position when changing to a successor lanelet for the given lanelet sequence"""
@@ -2004,4 +2016,4 @@ class Node:
             if len(self.lanelets) > 0 and not self.x0[0]['lanelet'] in lanelets[self.lanelets[-1]].successor:
                 expect_changes = expect_changes + 1
 
-        return W_LANE_CHANGE * (lane_changes + expect_changes) + W_DIST * np.sum(diff) + W_SAFE_DIST * np.sum(viol)
+        return W_LANE_CHANGE * (lane_changes + expect_changes) + W_VEL * np.sum(diff) + W_SAFE_DIST * np.sum(viol)
