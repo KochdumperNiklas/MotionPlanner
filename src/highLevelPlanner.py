@@ -64,7 +64,7 @@ def highLevelPlanner(scenario, planning_problem, param, priority=False):
     vel = [(s.bounds[1], s.bounds[3]) for s in space]
 
     # compute a desired reference trajectory
-    ref_traj, plan = reference_trajectory(plan, seq, space, vel_prof, time_lane, param, lanelets)
+    ref_traj, plan = reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param, lanelets)
 
     # resolve issue with spaces consisting of multiple distinct polygons
     space_all = remove_multi_polyogns(space_all, ref_traj)
@@ -1541,11 +1541,11 @@ def increase_free_space(space, param):
 
     return space
 
-def reference_trajectory(plan, seq, space, vel_prof, time_lane, param, lanelets):
+def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param, lanelets):
     """compute a desired reference trajectory"""
 
     # compute suitable velocity profile
-    x, v = trajectory_position_velocity(space, plan, vel_prof, lanelets, param)
+    x, v = trajectory_position_velocity(space, plan, vel_prof, lanelets, safe_dist, param)
 
     # update plan (= lanelet-time-assignment)
     plan = np.asarray(plan)
@@ -1667,7 +1667,7 @@ def correct_centerline(traj, lanelet, param):
 
     return traj
 
-def trajectory_position_velocity(space, plan, vel_prof, lanelets, param):
+def trajectory_position_velocity(space, plan, vel_prof, lanelets, safe_dist, param):
     """compute the desired space-velocity trajectory"""
 
     # initialization
@@ -1697,8 +1697,25 @@ def trajectory_position_velocity(space, plan, vel_prof, lanelets, param):
         a = (v[i+1] - v[i])/dt
         x[i+1] = x[i] + v[i]*dt + 0.5 * a * dt**2
 
+        # check if point satisfies safe distance to other cars and correct it if not
+        for s in safe_dist[plan[i+1]][i+1]:
+            if s['l'] <= space[i+1].bounds[0] and s['u'] >= space[i+1].bounds[2]:
+                if s['l_safe'] < s['u_safe']:
+                    if s['l_safe'] <= x[i+1] <= s['u_safe']:
+                        x_des = x[i+1]
+                    elif x[i+1] > s['u_safe']:
+                        x_des = s['u_safe']
+                    else:
+                        x_des = s['l_safe']
+                else:
+                    x_des = 0.5*(s['l_safe'] + s['u_safe'])
+                break
+
+        if x[i+1] != x_des:
+            x_des = x_des + W_VEL / (W_VEL + W_SAFE_DIST) * (x[i+1] - x_des)
+
         # check if driving the desired velocity profile is feasible
-        if not space[i+1].contains(Point(x[i+1], v[i+1])):
+        if x_des != x[i+1] or not space[i+1].contains(Point(x[i+1], v[i+1])):
 
             # determine the best feasible acceleration
             p1 = (x[i] + v[i]*dt + 0.5 * a_max * dt**2, v[i] + a_max * dt)
@@ -1706,7 +1723,7 @@ def trajectory_position_velocity(space, plan, vel_prof, lanelets, param):
             pgon = space[i+1].intersection(LineString([p1, p2]))
 
             if not pgon.is_empty:
-                p = nearest_points(pgon, Point(x[i+1], v[i+1]))[0]
+                p = nearest_points(pgon, Point(x_des, v[i+1]))[0]
             elif space[i+1].exterior.distance(Point(p1[0], p1[1])) < 1e-10:
                 p = Point(p1[0], p1[1])
             elif space[i+1].exterior.distance(Point(p2[0], p2[1])) < 1e-10:
