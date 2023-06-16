@@ -1321,7 +1321,7 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
         # select the best transition to take to the previous lanelet
         if i > 0:
 
-            if time_step - transitions[-1]['step'] < MIN_LANE_CHANGE:
+            if is_successor and time_step - transitions[-1]['step'] < MIN_LANE_CHANGE:
                 time_step = transitions[-1]['step']
                 space_ = transitions[-1]['space']
             else:
@@ -1329,7 +1329,7 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
                 min_cost = np.inf
 
                 for t in transitions:
-                    if time_step - t['step'] >= MIN_LANE_CHANGE:
+                    if not is_successor or time_step - t['step'] >= MIN_LANE_CHANGE:
                         cost = cost_reference_trajectory(ref_traj, t, offset[i-1], safe_dist[seq.lanelets[i-1]])
                         if cost < min_cost:
                             time_step = t['step']
