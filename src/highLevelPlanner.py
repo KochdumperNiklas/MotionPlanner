@@ -1024,6 +1024,7 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_oc
     left = []
     right = []
     x0_new = []
+    space_suc = dict(zip(lanelet.successor, [None for i in range(len(lanelet.successor))]))
 
     # loop over all time steps up to the final time
     for i in range(x0[cnt]['step'], param['steps']):
@@ -1038,10 +1039,17 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_oc
             cnt = cnt + 1
 
         # avoid intersection with lanelet for moving on to a successor lanelet
-        if successor_possible:
-            space_prev = reach_set_forward(space_prev, param)
+        if space.bounds[2] >= lanelet.distance[-1] and len(free_space[lanelet.lanelet_id][i+1]) > 0 and \
+                free_space[lanelet.lanelet_id][i+1][-1].bounds[2] >= lanelet.distance[-1] - 1e-5:
+            for k in space_suc.keys():
+                if len(free_space[k][i+1]) > 0 and free_space[k][i+1][0].bounds[0] < 1e-5:
+                    if space_suc[k] is None:
+                        space_suc[k] = translate(space, -lanelet.distance[-1], 0)
+                    else:
+                        space_suc[k] = reach_set_forward(space_suc[k], param)
         else:
-            space_prev = space
+            for k in space_suc.keys():
+                space_suc[k] = None
 
         # intersect with free space on the lanelet
         space_lanelet = free_space[lanelet.lanelet_id][i+1]
@@ -1064,19 +1072,15 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_oc
             space = tmp[0]
 
         # check if it is possible to move on to a successor lanelet
-        space_ = translate(space, -lanelet.distance[len(lanelet.distance) - 1], 0)
-        successor_possible_ = False
-
         for suc in lanelet.successor:
-            for sp in free_space[suc][i+1]:
-                if space_.intersects(sp):
-                    space_prev_ = translate(space_prev, -lanelet.distance[len(lanelet.distance) - 1], 0)
-                    tmp = sp.intersection(space_prev_)
-                    if tmp.area > 0:
-                        successors = add_transition(successors, tmp, i + 1, suc, param)
-                        successor_possible_ = True
-
-        successor_possible = successor_possible_
+            if space_suc[suc] is not None:
+                if space_suc[suc].intersects(free_space[suc][i+1][0]):
+                    free = union_robust(translate(space_lanelet[-1], -lanelet.distance[-1], 0), free_space[suc][i+1][0])
+                    if free.intersects(space_suc[suc]):
+                        space_suc[suc] = free.intersection(space_suc[suc])
+                        successors = add_transition(successors, space_suc[suc], i + 1, suc, param)
+                else:
+                    space_suc[suc] = None
 
         if finished:
             break
