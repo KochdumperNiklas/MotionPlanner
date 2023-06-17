@@ -838,6 +838,22 @@ def intersects_interval(int1, int2):
 
     return False
 
+def intersects_polygon(pgon1, pgon2):
+    """check if two polygons intersect"""
+
+    # quick check based on the interval bounds
+    if not intersects_interval((pgon1.bounds[0], pgon1.bounds[2]), (pgon2.bounds[0], pgon2.bounds[2])) or \
+            not intersects_interval((pgon1.bounds[1], pgon1.bounds[3]), (pgon2.bounds[1], pgon2.bounds[3])):
+        return False
+    else:
+        try:
+            return pgon1.intersects(pgon2)
+        except:
+            if pgon1.intersection(pgon2).area > 0:
+                return True
+            else:
+                return False
+
 def safe_distance_violation(space, safe_distance):
     """check how much the given set violates the safe distance constraint"""
 
@@ -1033,7 +1049,6 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_oc
         # unite with set resulting from doing a lane-change from the predecessor lanelet
         if cnt+1 < len(x0)-1 and x0[cnt+1]['step'] == i+1:
             space = space.union(x0[cnt+1]['space'])
-            space = space.convex_hull
             cnt = cnt + 1
 
         # avoid intersection with lanelet for moving on to a successor lanelet
@@ -1238,7 +1253,7 @@ def add_transition(transitions, space, time_step, lanelet, param):
 
         # check if the current transition can be added to an existing transition
         if last_entry['step'] == time_step-1 and last_entry['lanelet'] == lanelet and \
-                space_new.intersects(last_entry['space']):
+                intersects_polygon(space_new, last_entry['space']):
             transitions[i].append({'space': space, 'step': time_step, 'lanelet': lanelet})
             found = True
             break
