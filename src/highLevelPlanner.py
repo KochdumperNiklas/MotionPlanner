@@ -1017,8 +1017,6 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_oc
         if prev[i]['step'] <= x0[cnt]['step']:
             cnt_prev = cnt_prev + 1
 
-    successor_possible = False
-
     drive_area = [x0[cnt]]
     successors = []
     left = []
@@ -1126,11 +1124,17 @@ def reach_set_forward(space, param):
     dt = param['time_step']
     a_max = param['a_max']
 
-    space1 = affine_transform(space, [1, dt, 0, 1, 0.5 * dt ** 2 * a_max, dt * a_max])
+    A = [1, dt, 0, 1, 0, 0]
+    B = LineString([[-0.5 * dt ** 2 * a_max, -dt * a_max], [0.5 * dt ** 2 * a_max, dt * a_max]])
+
+    space_new = affine_transform(space, A)
+    space_new = minkowski_sum_polygon_line(space_new, B)
+
+    """space1 = affine_transform(space, [1, dt, 0, 1, 0.5 * dt ** 2 * a_max, dt * a_max])
     space2 = affine_transform(space, [1, dt, 0, 1, -0.5 * dt ** 2 * a_max, -dt * a_max])
 
     space_new = space1.union(space2)
-    space_new = space_new.convex_hull
+    space_new = space_new.convex_hull"""
 
     return space_new
 
@@ -1140,13 +1144,84 @@ def reach_set_backward(space, param):
     dt = param['time_step']
     a_max = param['a_max']
 
-    space1 = affine_transform(space, [1, -dt, 0, 1, -0.5 * dt ** 2 * a_max, dt * a_max])
+    A = [1, -dt, 0, 1, 0, 0]
+    B = LineString([[-0.5 * dt ** 2 * a_max, dt * a_max], [0.5 * dt ** 2 * a_max, -dt * a_max]])
+
+    space_new = affine_transform(space, A)
+    space_new = minkowski_sum_polygon_line(space_new, B)
+
+    """space1 = affine_transform(space, [1, -dt, 0, 1, -0.5 * dt ** 2 * a_max, dt * a_max])
     space2 = affine_transform(space, [1, -dt, 0, 1, 0.5 * dt ** 2 * a_max, -dt * a_max])
 
     space_new = space1.union(space2)
-    space_new = space_new.convex_hull
+    space_new = space_new.convex_hull"""
 
     return space_new
+
+def minkowski_sum_polygon_line(pgon, line):
+    """compute the Minkowski sum between a polygon and a line"""
+
+    # get center and difference vector for the line
+    m_line = 0.5 * np.array([line.coords.xy[0][0] + line.coords.xy[0][1], line.coords.xy[1][0] + line.coords.xy[1][1]])
+    d_line = 0.5 * np.array([line.coords.xy[0][1] - line.coords.xy[0][0], line.coords.xy[1][1] - line.coords.xy[1][0]])
+
+    # shift polygon by line center
+    pgon = translate(pgon, m_line[0], m_line[1])
+
+    # convert to a list of polygons in case the polygons are disconnected
+    if not isinstance(pgon, Polygon):
+        polygons = []
+        for p in list(pgon.geoms):
+            if isinstance(p, Polygon):
+                polygons.append(p)
+    else:
+        polygons = [pgon]
+
+    # loop over all polygons
+    res = []
+
+    for pgon in polygons:
+
+        # get vertices
+        V = np.concatenate((np.expand_dims(pgon.exterior.xy[0], axis=0),
+                            np.expand_dims(pgon.exterior.xy[1], axis=0)), axis=0)
+
+        # split into lower and upper boundary
+        tmp = np.array([[-d_line[1], d_line[0]]]) @ V
+        ind1 = np.minimum(np.argmin(tmp), np.argmax(tmp))
+        ind2 = np.maximum(np.argmin(tmp), np.argmax(tmp))
+
+        V1 = V[:, ind1:ind2+1]
+        V2 = np.concatenate((V[:, ind2:], V[:, 0:ind1+1]), axis=1)
+
+        # shift the two parts by +/- the line vector
+        pgon_shift = translate(pgon, d_line[0], d_line[1])
+
+        V1_ = V1 + np.expand_dims(d_line, axis=1) @ np.ones((1, V1.shape[1]))
+        V2_ = V2 - np.expand_dims(d_line, axis=1) @ np.ones((1, V2.shape[1]))
+        V = np.concatenate((V1_, V2_), axis=1)
+        pgon1 = Polygon(list(V.T))
+
+        V1_ = V1 - np.expand_dims(d_line, axis=1) @ np.ones((1, V1.shape[1]))
+        V2_ = V2 + np.expand_dims(d_line, axis=1) @ np.ones((1, V2.shape[1]))
+        V = np.concatenate((V1_, V2_), axis=1)
+        pgon2 = Polygon(list(V.T))
+
+        if not pgon1.is_valid:
+            res.append(pgon2)
+        elif not pgon2.is_valid:
+            res.append(pgon1)
+        else:
+            if pgon1.intersection(pgon_shift).area > pgon2.intersection(pgon_shift).area:
+                res.append(pgon1)
+            else:
+                res.append(pgon2)
+
+    # construct the resuling set (potentially a multi-polygon)
+    if len(res) == 1:
+        return res[0]
+    else:
+        return MultiPolygon(res)
 
 def add_transition(transitions, space, time_step, lanelet, param):
     """add a new transition to the list of possible transitions"""
