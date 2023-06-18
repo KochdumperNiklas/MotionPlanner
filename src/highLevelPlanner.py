@@ -469,6 +469,16 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
     occupied_dist = dict(zip(lanelets.keys(), deepcopy(tmp)))
     partially_occupied = dict(zip(lanelets.keys(), deepcopy(tmp)))
 
+    # compute width for all lanelets
+    width = []
+
+    for k in lanelets.keys():
+        width_min, width_max = width_lanelet(lanelets[k])
+        width.append((width_min, width_max))
+
+    width_lanelets = dict(zip(lanelets.keys(), width))
+
+
     # loop over all obstacles
     for obs in obstacles:
 
@@ -547,6 +557,8 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                         l = lanelets[id]
                         d_min = l.distance[0]
                         d_max = l.distance[-1]
+                        width_min = width_lanelets[id][0]
+                        width_max = width_lanelets[id][1]
 
                         # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
                         dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon)
@@ -568,21 +580,24 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                                 occupied_space[ind][o.time_step].append({'space': (0, d), 'width': (y_min, y_max)})
 
                         # compute occupied space if the safe distance is respected
-                        offset_safe = 0.5 * param['length_max'] + np.maximum(v[o.time_step], 2)
-                        space = (dist_min - offset_safe, dist_max + offset_safe)
-                        occupied_dist[id][o.time_step].append(space)
+                        if not (width_max - y_max > y_min - width_min and width_max - y_max > param['width'] + 0.3) and \
+                                not (width_max - y_max <= y_min - width_min and y_min - width_min > param['width'] + 0.3):
 
-                        if dist_min - offset_safe < 0:
-                            for ind in l.predecessor:
-                                d = lanelets[ind].distance[-1]
-                                space = (dist_min - offset_safe + d, dist_max + offset_safe + d)
-                                occupied_dist[ind][o.time_step].append(space)
+                            offset_safe = 0.5 * param['length_max'] + np.maximum(v[o.time_step], 2)
+                            space = (dist_min - offset_safe, dist_max + offset_safe)
+                            occupied_dist[id][o.time_step].append(space)
 
-                        if dist_max + offset_safe > l.distance[-1]:
-                            for ind in l.successor:
-                                d = l.distance[-1]
-                                space = (dist_min - offset_safe - d, dist_max + offset_safe - d)
-                                occupied_dist[ind][o.time_step].append(space)
+                            if dist_min - offset_safe < 0:
+                                for ind in l.predecessor:
+                                    d = lanelets[ind].distance[-1]
+                                    space = (dist_min - offset_safe + d, dist_max + offset_safe + d)
+                                    occupied_dist[ind][o.time_step].append(space)
+
+                            if dist_max + offset_safe > l.distance[-1]:
+                                for ind in l.successor:
+                                    d = l.distance[-1]
+                                    space = (dist_min - offset_safe - d, dist_max + offset_safe - d)
+                                    occupied_dist[ind][o.time_step].append(space)
 
     # unite occupied spaces that belong to the same time
     for id in lanelets.keys():
@@ -594,8 +609,9 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
         else:
             v_max = speed_limit[id]
 
-        # compute width of the lanelet
-        width_min, width_max = width_lanelet(lanelets[id])
+        # get width of the lanelet
+        width_min = width_lanelets[id][0]
+        width_max = width_lanelets[id][1]
 
         # loop over all time steps
         for j in range(len(occupied_space[id])):
@@ -862,7 +878,7 @@ def safe_distance_violation(space, safe_distance):
     u = space.bounds[2]
 
     for entry in safe_distance:
-        if entry['l'] <= l and entry['u'] >= u:
+        if entry['l'] <= l <= entry['u'] or entry['l'] <= u <= entry['u']:
             l_safe = entry['l_safe']
             u_safe = entry['u_safe']
             l_ = entry['l']
@@ -1344,7 +1360,9 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
 
     for fin in seq.x0:
 
-        cost = cost_reference_trajectory(ref_traj, fin, offset[-1], safe_dist[seq.lanelets[-1]])
+        cost_vel = cost_reference_trajectory(ref_traj, fin, offset[-1])
+        cost_safe_dist = safe_distance_violation(fin['space'], safe_dist[seq.lanelets[-1]][fin['step']])
+        cost = W_VEL * cost_vel + W_SAFE_DIST * cost_safe_dist
 
         if cost < min_cost:
             final_set = deepcopy(fin)
@@ -1395,10 +1413,11 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
                 if is_successor:
                     if space_prev.bounds[0] <= 0:
                         space_ = translate(space_prev, dist, 0)
-                        space_ = space_.intersection(seq.drive_area[i - 1][cnt]['space'])
-                        if not isinstance(space_, Polygon):
-                            space_ = space_.convex_hull
-                        transitions.append({'space': space_, 'step': j})
+                        if space_.intersects(seq.drive_area[i - 1][cnt]['space']):
+                            space_ = space_.intersection(seq.drive_area[i - 1][cnt]['space'])
+                            if not isinstance(space_, Polygon):
+                                space_ = space_.convex_hull
+                            transitions.append({'space': space_, 'step': j})
                 else:
                     if space[j].intersects(seq.drive_area[i - 1][cnt]['space']):
                         space_ = space[j].intersection(seq.drive_area[i - 1][cnt]['space'])
@@ -1415,7 +1434,7 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
         # select the best transition to take to the previous lanelet
         if i > 0:
 
-            if is_successor and time_step - transitions[-1]['step'] < MIN_LANE_CHANGE:
+            if not is_successor and time_step - transitions[-1]['step'] < MIN_LANE_CHANGE:
                 time_step = transitions[-1]['step']
                 space_ = transitions[-1]['space']
             else:
@@ -1423,8 +1442,17 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
                 min_cost = np.inf
 
                 for t in transitions:
-                    if not is_successor or time_step - t['step'] >= MIN_LANE_CHANGE:
-                        cost = cost_reference_trajectory(ref_traj, t, offset[i-1], safe_dist[seq.lanelets[i-1]])
+                    if is_successor or time_step - t['step'] >= MIN_LANE_CHANGE:
+
+                        cost_vel = cost_reference_trajectory(ref_traj, t, offset[i-1])
+                        cost_safe_dist1 = safe_distance_violation(t['space'], safe_dist[seq.lanelets[i-1]][t['step']])
+                        if is_successor:
+                            t_space = translate(t['space'], -dist, 0)
+                        else:
+                            t_space = t['space']
+                        cost_safe_dist2 = safe_distance_violation(t_space, safe_dist[seq.lanelets[i]][t['step']])
+                        cost = W_VEL * cost_vel + W_SAFE_DIST * np.maximum(cost_safe_dist1, cost_safe_dist2)
+
                         if cost < min_cost:
                             time_step = t['step']
                             space_ = t['space']
@@ -1832,10 +1860,9 @@ def trajectory_position_velocity(space, plan, vel_prof, lanelets, safe_dist, par
 
     return x, v
 
-def cost_reference_trajectory(ref_traj, area, offset, safe_dist):
+def cost_reference_trajectory(ref_traj, area, offset):
     """compute cost based on the distance between the reachable set and the desired reference trajectory"""
 
-    # compute distance from desired reference trajectory
     p = Point(ref_traj[area['step']][0] - offset, ref_traj[area['step']][1])
 
     if area['space'].contains(p):
@@ -1843,11 +1870,7 @@ def cost_reference_trajectory(ref_traj, area, offset, safe_dist):
     else:
         dist = area['space'].exterior.distance(p)
 
-    # compute violation of the safe distance to the other traffic participants
-    viol = safe_distance_violation(area['space'], safe_dist[area['step']])
-
-    # compute overall cost
-    return W_VEL * dist + W_SAFE_DIST * viol
+    return dist
 
 def offsets_lanelet_sequence(seq, lanelets):
     """determine shift in position when changing to a successor lanelet for the given lanelet sequence"""
