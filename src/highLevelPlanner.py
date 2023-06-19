@@ -1239,14 +1239,27 @@ def minkowski_sum_polygon_line(pgon, line):
         pgon2 = Polygon(list(V.T))
 
         if not pgon1.is_valid:
-            res.append(pgon2)
+            pgon_res = pgon2
         elif not pgon2.is_valid:
-            res.append(pgon1)
+            pgon_res = pgon1
         else:
             if pgon1.intersection(pgon_shift).area > pgon2.intersection(pgon_shift).area:
-                res.append(pgon1)
+                pgon_res = pgon1
             else:
-                res.append(pgon2)
+                pgon_res = pgon2
+
+        # unit with parallel polygons if possible
+        if len(res) > 0:
+            found = False
+            for i in range(len(res)):
+                if res[i].intersects(pgon_res):
+                    res[i] = res[i].union(pgon_res)
+                    found = True
+                    break
+            if not found:
+                res.append(pgon_res)
+        else:
+            res.append(pgon_res)
 
     # construct the resuling set (potentially a multi-polygon)
     if len(res) == 1:
