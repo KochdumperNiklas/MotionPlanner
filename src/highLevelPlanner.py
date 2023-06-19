@@ -1497,6 +1497,14 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
 
         transitions = []
 
+        # make sure that the first set at least enters the loop once
+        first_set = False
+
+        if i == len(seq.lanelets)-1 and time_step - 1 == seq.drive_area[i][0]['step'] - 1:
+            time_step = time_step + 1
+            space.append(space[-1])
+            first_set = True
+
         # loop over all time steps on the current lanelet
         for j in range(time_step-1, seq.drive_area[i][0]['step']-1, -1):
 
@@ -1505,7 +1513,10 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
                 break
 
             # propagate set one time step backward in time
-            space[j] = reach_set_backward(space[j+1], param)
+            if first_set:
+                space[j] = space[j+1]
+            else:
+                space[j] = reach_set_backward(space[j+1], param)
             space_prev = space[j]
 
             # intersect with the previous set
@@ -1577,6 +1588,10 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
 
             space[time_step] = space_
             plan[time_step] = seq.lanelets[i-1]
+
+    # potentially remove the previously added auxiliary set
+    if len(space) > len(plan):
+        space = space[:-1]
 
     return plan, space
 
