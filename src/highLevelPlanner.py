@@ -2151,8 +2151,12 @@ class Node:
                     if set['step'] == i:
                         if set['space'].contains(p):
                             diff_cur = 0
-                        else:
+                        elif isinstance(set['space'], Polygon):
                             diff_cur = set['space'].exterior.distance(p)
+                        else:
+                            diff_cur = np.inf
+                            for pgon in set['space'].geoms:
+                                diff_cur = np.minimum(diff_cur, pgon.exterior.distance(p))
                     elif set['step'] > i:
                         break
 
