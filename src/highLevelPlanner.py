@@ -494,7 +494,6 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
 
     width_lanelets = dict(zip(lanelets.keys(), width))
 
-
     # loop over all obstacles
     for obs in obstacles:
 
@@ -502,7 +501,7 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
         if isinstance(obs, StaticObstacle):
 
             # determine lanelets that are affected by the obstacle
-            pgon = get_shapely_object(obs.obstacle_shape)
+            pgon = get_shapely_object(obs.occupancy_at_time(0).shape)
 
             if obs.initial_shape_lanelet_ids is None:
                 intersecting_lanes = set()
