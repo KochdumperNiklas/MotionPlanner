@@ -141,10 +141,15 @@ def initialization(scenario, planning_problem, param):
                     for id in lanelets.keys():
                         if lanelets[id].polygon.shapely_object.intersects(set):
                             param_['lane'] = id
+                            goal_space_start, goal_space_end, _, _ = projection_lanelet_centerline(
+                                                                                        lanelets[param_['lane']], set)
+                            param_['set'] = construct_goal_set(goal_state, goal_space_start, goal_space_end, param)
+                            param['goal'].append(deepcopy(param_))
                 else:
                     param_['lane'] = list(planning_problem.goal.lanelets_of_goal_position.values())[i][j]
-
-                goal_space_start, goal_space_end, _, _ = projection_lanelet_centerline(lanelets[param_['lane']], set)
+                    goal_space_start, goal_space_end, _, _ = projection_lanelet_centerline(lanelets[param_['lane']], set)
+                    param_['set'] = construct_goal_set(goal_state, goal_space_start, goal_space_end, param)
+                    param['goal'].append(deepcopy(param_))
 
             else:
 
@@ -159,13 +164,8 @@ def initialization(scenario, planning_problem, param):
                     param_['space'] = l.polygon.shapely_object
                     goal_space_start, goal_space_end, _, _ = projection_lanelet_centerline(l, l.polygon.shapely_object)
 
-            if hasattr(goal_state, 'velocity'):
-                v = goal_state.velocity
-                param_['set'] = interval2polygon([goal_space_start, v.start], [goal_space_end, v.end])
-            else:
-                param_['set'] = interval2polygon([goal_space_start, param['v_min']], [goal_space_end, param['v_max']])
-
-            param['goal'].append(deepcopy(param_))
+                param_['set'] = construct_goal_set(goal_state, goal_space_start, goal_space_end, param)
+                param['goal'].append(deepcopy(param_))
 
     # determine distance from initial point for each lanelet
     dist_init = distance2init(lanelets, param)
@@ -192,6 +192,17 @@ def initialization(scenario, planning_problem, param):
             speed_limit[id] = np.minimum(speed_limit[id], limit)
 
     return param, lanelets, speed_limit, dist_init
+
+def construct_goal_set(goal_state, goal_space_start, goal_space_end, param):
+    """construct the space for the goal set (in position-velocity space)"""
+
+    if hasattr(goal_state, 'velocity'):
+        v = goal_state.velocity
+        space = interval2polygon([goal_space_start, v.start], [goal_space_end, v.end])
+    else:
+        space = interval2polygon([goal_space_start, param['v_min']], [goal_space_end, param['v_max']])
+
+    return space
 
 def speed_limit_dynamics(lanelet, param):
     """compute maximum speed for a lanelet based on kinematic constraints (Kamm's circle)"""
