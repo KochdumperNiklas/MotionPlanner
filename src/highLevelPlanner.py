@@ -175,16 +175,21 @@ def initialization(scenario, planning_problem, param):
     interpreter = TrafficSigInterpreter(scenario.scenario_id.country_name, scenario.lanelet_network)
 
     for id in lanelets.keys():
-        speed_limit[id] = interpreter.speed_limit(frozenset([id]))
 
+        speed_limit[id] = 100
+
+        # get legal speed limit
+        limit = interpreter.speed_limit(frozenset([id]))
+
+        if limit is not None:
+            speed_limit[id] = np.minimum(speed_limit[id], limit)
+
+        # set artifical speed limit based on the dynamic constraints of the car (to not drive too fast into curves)
         limit = speed_limit_dynamics(lanelets[id], param)
         t = np.maximum((param['v_init'] - limit) / param['a_max'], 0)
 
         if id not in param['x0_lane'] and param['v_init'] * t - 0.5*param['a_max']*t**2 < dist_init[id]:
-            if speed_limit[id] is None:
-                speed_limit[id] = limit
-            else:
-                speed_limit[id] = np.minimum(speed_limit[id], limit)
+            speed_limit[id] = np.minimum(speed_limit[id], limit)
 
     return param, lanelets, speed_limit, dist_init
 
