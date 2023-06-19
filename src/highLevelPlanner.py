@@ -6,7 +6,7 @@ from shapely.geometry import MultiPolygon
 from shapely.geometry import LineString
 from shapely.affinity import affine_transform
 from shapely.affinity import translate
-from shapely.ops import nearest_points
+from shapely.ops import nearest_points, triangulate
 from copy import deepcopy
 from commonroad.scenario.obstacle import StaticObstacle
 from commonroad.geometry.shape import ShapeGroup
@@ -898,10 +898,56 @@ def intersects_polygon(pgon1, pgon2):
         try:
             return pgon1.intersects(pgon2)
         except:
-            if pgon1.intersection(pgon2).area > 0:
-                return True
+            if isinstance(pgon1, Polygon) and isinstance(pgon2, Polygon):
+                if pgon1.intersection(pgon2).area > 0:
+                    return True
+                else:
+                    return False
             else:
+                if isinstance(pgon1,Polygon):
+                    pgon1 = [pgon1]
+                else:
+                    pgon1 = pgon1.geoms
+                if isinstance(pgon2,Polygon):
+                    pgon2 = [pgon2]
+                else:
+                    pgon2 = pgon2.geoms
+
+                for p1 in pgon1:
+                    for p2 in pgon2:
+                        if intersects_polygon(p1, p2):
+                            return True
+
                 return False
+
+def union_polygon(pgon1, pgon2):
+    """robustly compute the union of two polygons"""
+
+    if isinstance(pgon1, Polygon) and isinstance(pgon2, Polygon):
+        return pgon1.union(pgon2)
+    else:
+        try:
+            return pgon1.union(pgon2)
+        except:
+            if isinstance(pgon1, Polygon):
+                pgon1 = [pgon1]
+            else:
+                pgon1 = pgon1.geoms
+            if isinstance(pgon2, Polygon):
+                pgon2 = [pgon2]
+            else:
+                pgon2 = pgon2.geoms
+
+            pgon = pgon1[0]
+
+            for i in range(1, len(pgon1)):
+                pgon = pgon.union(pgon1[i])
+
+            for i in range(len(pgon2)):
+                pgon = pgon.union(pgon2[i])
+
+        return pgon
+
 
 def safe_distance_violation(space, safe_distance):
     """check how much the given set violates the safe distance constraint"""
@@ -1097,7 +1143,7 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_oc
 
         # unite with set resulting from doing a lane-change from the predecessor lanelet
         if cnt+1 < len(x0)-1 and x0[cnt+1]['step'] == i+1:
-            space = space.union(x0[cnt+1]['space'])
+            space = union_polygon(space, x0[cnt+1]['space'])
             cnt = cnt + 1
 
         # avoid intersection with lanelet for moving on to a successor lanelet
@@ -1273,15 +1319,22 @@ def minkowski_sum_polygon_line(pgon, line):
         V = np.concatenate((V1_, V2_), axis=1)
         pgon2 = Polygon(list(V.T))
 
-        if not pgon1.is_valid:
-            pgon_res = pgon2
-        elif not pgon2.is_valid:
-            pgon_res = pgon1
+        # select the correct part to construct the resulting polygon
+        if not pgon1.is_valid and not pgon2.is_valid:
+            tri = triangulate(pgon)
+            pgon_res = minkowski_sum_polygon_line(tri[0], line)
+            for i in range(len(tri)):
+                pgon_res = pgon_res.union(minkowski_sum_polygon_line(tri[i], line))
         else:
-            if pgon1.intersection(pgon_shift).area > pgon2.intersection(pgon_shift).area:
+            if not pgon1.is_valid:
+                pgon_res = pgon2
+            elif not pgon2.is_valid:
                 pgon_res = pgon1
             else:
-                pgon_res = pgon2
+                if pgon1.intersection(pgon_shift).area > pgon2.intersection(pgon_shift).area:
+                    pgon_res = pgon1
+                else:
+                    pgon_res = pgon2
 
         # unit with parallel polygons if possible
         if len(res) > 0:
