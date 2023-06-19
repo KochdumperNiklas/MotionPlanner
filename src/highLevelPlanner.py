@@ -1109,6 +1109,8 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_oc
                         space_suc[k] = translate(space, -lanelet.distance[-1], 0)
                     else:
                         space_suc[k] = reach_set_forward(space_suc[k], param)
+                else:
+                    space_suc[k] = None
         else:
             for k in space_suc.keys():
                 space_suc[k] = None
