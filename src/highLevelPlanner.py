@@ -1777,6 +1777,9 @@ def correct_centerline(traj, lanelet, param):
     # find start and end index
     index = [i for i in range(len(traj)) if len(traj[i]) > 0]
 
+    if len(index) == 1:
+        return traj
+
     # compute orientation
     orientation = np.zeros((len(index, )))
 
