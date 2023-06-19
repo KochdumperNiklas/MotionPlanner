@@ -19,7 +19,7 @@ W_VEL = 1
 W_SAFE_DIST = 10
 
 # safety distance to other cars
-DIST_SAFE = 2
+DIST_SAFE = 1
 
 # minimum number of consecutive time steps required to perform a lane change
 MIN_LANE_CHANGE = 5
