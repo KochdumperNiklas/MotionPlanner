@@ -1781,8 +1781,8 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
                     break
 
     # correct the center trajectory to avoid collisions with lanelet boundaries for lanelets with high curvature
-    for j in range(len(center_traj)):
-        center_traj[j] = correct_centerline(center_traj[j], lanelets[lanes[j]], param)
+    """for j in range(len(center_traj)):
+        center_traj[j] = correct_centerline(center_traj[j], lanelets[lanes[j]], param)"""
 
     # store reference trajectory (without considering lane changes)
     ref_traj = np.zeros((2, len(plan)))
