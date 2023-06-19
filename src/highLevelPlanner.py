@@ -1461,6 +1461,14 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
                 space_ = space_.intersection(seq.drive_area[i-1][-1]['space'])
                 transitions.append({'space': space_, 'step': j-1})
 
+            # catch special case where one stays on the same lanelet
+            if i > 0 and seq.lanelets[i] == seq.lanelets[i-1] and j == seq.drive_area[i][0]['step'] and \
+                    seq.drive_area[i-1][-1]['step'] == j and not space[j].intersects(seq.drive_area[i-1][-1]['space']):
+                space_ = reach_set_backward(space[j], param)
+                if space_.intersects(seq.drive_area[i-1][-2]['space']):
+                    space_ = space_.intersection(seq.drive_area[i - 1][-2]['space'])
+                    transitions.append({'space': space_, 'step': j - 1})
+
         # select the best transition to take to the previous lanelet
         if i > 0:
 
