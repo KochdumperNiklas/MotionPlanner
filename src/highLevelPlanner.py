@@ -1815,6 +1815,8 @@ def trajectory_position_velocity(space, plan, vel_prof, lanelets, safe_dist, par
     dt = param['time_step']
     a_max = param['a_max']
 
+    space_orig = deepcopy(space)
+
     v = np.asarray(vel_prof[:len(plan)])
     x = np.zeros(v.shape)
 
@@ -1840,16 +1842,16 @@ def trajectory_position_velocity(space, plan, vel_prof, lanelets, safe_dist, par
 
         # check if point satisfies safe distance to other cars and correct it if not
         for s in safe_dist[plan[i+1]][i+1]:
-            if s['l'] <= space[i+1].bounds[0] and s['u'] >= space[i+1].bounds[2]:
+            if s['l'] <= space_orig[i+1].bounds[0] and s['u'] >= space_orig[i+1].bounds[2]:
                 if s['l_safe'] < s['u_safe']:
-                    if s['l_safe'] <= x[i+1] <= s['u_safe']:
+                    if s['l_safe'] + dist <= x[i+1] <= s['u_safe'] + dist:
                         x_des = x[i+1]
-                    elif x[i+1] > s['u_safe']:
-                        x_des = s['u_safe']
+                    elif x[i+1] > s['u_safe'] + dist:
+                        x_des = s['u_safe'] + dist
                     else:
-                        x_des = s['l_safe']
+                        x_des = s['l_safe'] + dist
                 else:
-                    x_des = 0.5*(s['l_safe'] + s['u_safe'])
+                    x_des = 0.5*(s['l_safe'] + s['u_safe']) + dist
                 break
 
         if x[i+1] != x_des:
