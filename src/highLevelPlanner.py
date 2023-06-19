@@ -782,6 +782,9 @@ def projection_lanelet_centerline(lanelet, pgon):
         lane = lanelet.polygon.shapely_object.buffer(0)
         o_int = lane.intersection(pgon)
 
+    if not isinstance(o_int, Polygon):
+        o_int = o_int.convex_hull
+
     vx, vy = o_int.exterior.coords.xy
     V = np.stack((vx, vy))
 
