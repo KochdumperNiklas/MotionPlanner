@@ -546,7 +546,8 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
         else:
 
             # determine lanelets that are affected by the obstacle
-            if obs.prediction.shape_lanelet_assignment is None:
+            if not hasattr(obs.prediction, 'shape_lanelet_assignment') or \
+                    obs.prediction.shape_lanelet_assignment is None:
                 intersecting_lanes = {}
                 for o in obs.prediction.occupancy_set:
                     intersecting_lanes[o.time_step] = set()
@@ -830,7 +831,9 @@ def obstacle_velocity(obs, param):
     for i in range(len(obs.prediction.occupancy_set)-1):
         occ1 = obs.prediction.occupancy_set[i]
         occ2 = obs.prediction.occupancy_set[i+1]
-        dx = np.linalg.norm(occ2.shape.center-occ1.shape.center)
+        c1 = get_center(occ1.shape)
+        c2 = get_center(occ2.shape)
+        dx = np.linalg.norm(c2-c1)
         dt = (occ2.time_step-occ1.time_step)*param['time_step']
         v[occ1.time_step] = dx/dt
 
@@ -838,6 +841,17 @@ def obstacle_velocity(obs, param):
     v[-1] = v[-2]
 
     return v
+
+def get_center(shape):
+    """get the center of a CommonRoad shape object"""
+
+    if hasattr(shape, 'center'):
+        return shape.center
+    else:
+        c = []
+        for s in shape.shapes:
+            c.append(s.center)
+        return np.mean(np.asarray(c), axis=0)
 
 def area_safe_distance(free_space, occupied_space):
     """compute the areas in which the safe distance constraint is satisfied"""
@@ -1491,7 +1505,10 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
                             t_space = translate(t['space'], -dist, 0)
                         else:
                             t_space = t['space']
-                        cost_safe_dist2 = safe_distance_violation(t_space, safe_dist[seq.lanelets[i]][t['step']])
+                        if t_space.bounds[0] > 0:
+                            cost_safe_dist2 = safe_distance_violation(t_space, safe_dist[seq.lanelets[i]][t['step']])
+                        else:
+                            cost_safe_dist2 = 0
                         cost = W_VEL * cost_vel + W_SAFE_DIST * np.maximum(cost_safe_dist1, cost_safe_dist2)
 
                         if cost < min_cost:
