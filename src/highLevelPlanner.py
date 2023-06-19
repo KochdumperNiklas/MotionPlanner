@@ -1441,13 +1441,14 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
 
             # catch special case where time steps do not overlap
             if i > 0 and is_successor and j == seq.drive_area[i][0]['step'] and seq.drive_area[i-1][-1]['step'] == j-1:
-                space_ = translate(space_prev, dist, 0)
-                transitions.append({'space': space_, 'step': j})
+                space_ = translate(reach_set_backward(space_prev, param), dist, 0)
+                space_ = space_.intersection(seq.drive_area[i-1][-1]['space'])
+                transitions.append({'space': space_, 'step': j-1})
 
         # select the best transition to take to the previous lanelet
         if i > 0:
 
-            if not is_successor and time_step - transitions[-1]['step'] < MIN_LANE_CHANGE:
+            if len(transitions) == 1 or (not is_successor and time_step - transitions[-1]['step'] < MIN_LANE_CHANGE):
                 time_step = transitions[-1]['step']
                 space_ = transitions[-1]['space']
             else:
