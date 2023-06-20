@@ -17,7 +17,7 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000, weight_velocity=1,
                      weight_safe_distance=10, minimum_safe_distance=1, minimum_steps_lane_change=5,
                      desired_steps_lane_change=20, desired_acceleration=1, desired_velocity='speed_limit',
-                     goal_set_priority=False):
+                     compute_free_space=True, goal_set_priority=False):
     """decide on which lanelets to be at all points in time"""
 
     # store algorithm settings
@@ -29,6 +29,7 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     param['desired_steps_lane_change'] = desired_steps_lane_change
     param['desired_acceleration'] = desired_acceleration
     param['desired_velocity'] = desired_velocity
+    param['compute_free_space'] = compute_free_space
     param['goal_set_priority'] = goal_set_priority
 
     # extract required information from the planning problem
@@ -52,8 +53,11 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     # refine the plan: decide on which lanelet to be on for all time steps
     plan, space = refine_plan(seq, ref_traj, lanelets, safe_dist, param)
 
-    # determine drivable space for lane changes
-    space_all, time_lane = space_lane_changes(space, plan, lanelets, free_space, partially_occupied, param)
+    # determine time steps in which a lane change is possible
+    time_lane = time_steps_lane_change(space, plan, lanelets, free_space)
+
+    # determine free space in the global coordinate frame
+    space_glob = free_space_global(space, plan, time_lane, lanelets, free_space, partially_occupied, param)
 
     # shrink space by intersecting with the forward reachable set
     space = reduce_space(space, plan, lanelets, param)
@@ -65,9 +69,9 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     ref_traj, plan = reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param, lanelets)
 
     # resolve issue with spaces consisting of multiple distinct polygons
-    space_all = remove_multi_polyogns(space_all, ref_traj)
+    space_glob = remove_multi_polyogns(space_glob, ref_traj)
 
-    return plan, vel, space_all, ref_traj
+    return plan, vel, space_glob, ref_traj
 
 
 def initialization(scenario, planning_problem, param):
@@ -1606,8 +1610,12 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
 
     return plan, space
 
-def space_lane_changes(space, plan, lanelets, free_space, partially_occupied, param):
-    """compute the drivable space at a lanelet change in the global coordinate frame"""
+def free_space_global(space, plan, time, lanelets, free_space, partially_occupied, param):
+    """compute the drivable space in the global coordinate frame"""
+
+    # check if the free around the reference trajectory should be computed
+    if not param['compute_free_space']:
+        return None
 
     # increase free space by the vehicle dimensions
     space = increase_free_space(space, param)
@@ -1762,7 +1770,86 @@ def space_lane_changes(space, plan, lanelets, free_space, partially_occupied, pa
                 if sp.intersects(space_glob[i]):
                     space_glob[i] = space_glob[i].difference(sp)
 
-    return space_glob, time
+    return space_glob
+
+def time_steps_lane_change(space, plan, lanelets, free_space):
+    """compute the time steps in which a lane change is possible"""
+
+    # determine indices for all lane changes
+    plan = np.asarray(plan)
+    ind = np.where(plan[:-1] != plan[1:])[0]
+
+    time = [[] for i in range(len(ind))]
+
+    # loop over all lane changes
+    for i in range(len(ind)):
+
+        lanelet_1 = lanelets[plan[ind[i]]]
+        lanelet_2 = lanelets[plan[ind[i]+1]]
+
+        # loop backward in time until previous lane change
+        if i == 0:
+            start = 0
+        else:
+            start = ind[i-1]
+
+        for j in range(ind[i], start-1, -1):
+
+            if plan[ind[i]+1] in lanelet_1.successor:
+
+                if space[j].bounds[2] >= lanelet_1.distance[-1]:
+
+                    for f in free_space[lanelet_2.lanelet_id][j]:
+                        if f.bounds[0] <= 0:
+                            time[i].append(j)
+                else:
+                    break
+
+            else:
+                intersection = False
+
+                for f in free_space[lanelet_2.lanelet_id][j]:
+                    if f.intersects(space[j]):
+                        intersection = True
+                        time[i].append(j)
+
+                if not intersection:
+                    break
+
+        # loop forward in time until the next lane change
+        if i == len(ind)-1:
+            end = len(space)-1
+        else:
+            end = ind[i+1]
+
+        for j in range(ind[i], end):
+
+            if plan[ind[i]+1] in lanelet_1.successor:
+
+                if space[j].bounds[2] <= 0:
+
+                    for f in free_space[lanelet_1.lanelet_id][j]:
+                        if f.bounds[2] >= lanelet_1.distance[-1]:
+                            time[i].append(j)
+                else:
+                    break
+
+            else:
+                intersection = False
+
+                for f in free_space[lanelet_1.lanelet_id][j]:
+                    if f.intersects(space[j]):
+                        intersection = True
+                        time[i].append(j)
+
+                if not intersection:
+                    break
+
+        # sort time steps where lane change is possible
+        time[i] = np.asarray(time[i])
+        time[i] = np.sort(time[i])
+
+    return time
 
 def remove_multi_polyogns(space, ref_traj):
     """select the best connected space for the case that space consists of multiple disconnected polygons"""
