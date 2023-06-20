@@ -16,7 +16,8 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 
 def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000, weight_velocity=1,
                      weight_safe_distance=10, minimum_safe_distance=1, minimum_steps_lane_change=5,
-                     desired_steps_lane_change=20, desired_acceleration=1, goal_set_priority=False):
+                     desired_steps_lane_change=20, desired_acceleration=1, desired_velocity='speed_limit',
+                     goal_set_priority=False):
     """decide on which lanelets to be at all points in time"""
 
     # store algorithm settings
@@ -27,6 +28,7 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     param['minimum_steps_lane_change'] = minimum_steps_lane_change
     param['desired_steps_lane_change'] = desired_steps_lane_change
     param['desired_acceleration'] = desired_acceleration
+    param['desired_velocity'] = desired_velocity
     param['goal_set_priority'] = goal_set_priority
 
     # extract required information from the planning problem
@@ -390,18 +392,23 @@ def velocity_profile(dist, speed_limit, param):
     """compute the desired velocity profile over time"""
 
     # select desired velocity
-    vel_des = np.inf
-
-    for id in param['x0_lane']:
-        if not speed_limit[id] is None:
-            vel_des = min(vel_des, speed_limit[id])
-
-    for goal in param['goal']:
-        if goal['lane'] is not None and speed_limit[goal['lane']] is not None:
-            vel_des = min(vel_des, speed_limit[goal['lane']])
-
-    if vel_des == np.inf:
+    if param['desired_velocity'] == 'init':
         vel_des = param['v_init']
+    elif param['desired_velocity'] == 'speed_limit':
+        vel_des = np.inf
+
+        for id in param['x0_lane']:
+            if not speed_limit[id] is None:
+                vel_des = min(vel_des, speed_limit[id])
+
+        for goal in param['goal']:
+            if goal['lane'] is not None and speed_limit[goal['lane']] is not None:
+                vel_des = min(vel_des, speed_limit[goal['lane']])
+
+        if vel_des == np.inf:
+            vel_des = param['v_init']
+    else:
+        Exception('Wrong value for input argument "desired velocity"!. The valid values are "init" and "speed_limit".')
 
     # loop over all possible combinations of initial sets and goal sets
     val = np.inf
