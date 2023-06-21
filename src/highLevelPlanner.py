@@ -57,7 +57,7 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     time_lane = time_steps_lane_change(space, plan, lanelets, free_space)
 
     # determine free space in the global coordinate frame
-    space_glob = free_space_global(space, plan, time_lane, lanelets, free_space, partially_occupied, param)
+    space_glob = free_space_global_(space, plan, time_lane, lanelets, free_space, partially_occupied, param)
 
     # shrink space by intersecting with the forward reachable set
     space = reduce_space(space, plan, lanelets, param)
@@ -1610,6 +1610,394 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
 
     return plan, space
 
+def free_space_global_(space, plan, time, lanelets, free_space, partially_occupied, param):
+    """compute the drivable space in the global coordinate frame"""
+
+    # check if the free space around the reference trajectory should be computed
+    if not param['compute_free_space']:
+        return None
+
+    # determine indices for all lane changes
+    plan = np.asarray(plan)
+    ind = np.where(plan[:-1] != plan[1:])[0]
+
+    # get types for all lane changes
+    types = []
+
+    for i in range(len(ind)):
+        l = lanelets[plan[ind[i]]]
+        if plan[ind[i]+1] in l.successor:
+            types.append('successor')
+        elif plan[ind[i]+1] == l.adj_right:
+            types.append('right')
+        else:
+            types.append('left')
+
+    if len(ind) == 0:
+        time = [[]]
+        ind = [len(plan)]
+
+    # loop over all time steps
+    space_glob = deepcopy(space)
+    cnt = 0
+
+    for i in range(len(plan)):
+
+        l = lanelets[plan[i]]
+        space_int = (space[i].bounds[0], space[i].bounds[2])
+        partial = []
+
+        # get free space on the current lanelet
+        for f in free_space[plan[i]][i]:
+            if intersects_interval((f.bounds[0], f.bounds[2]), space_int):
+                lower = f.bounds[0] - 0.5*param['length_max']
+                upper = f.bounds[2] + 0.5*param['length_max']
+                pgon = lanelet2global_(l, lower, upper)
+
+                for p in partially_occupied[plan[i]][i]:
+                    tmp = partially_occupied_global(p, l, lower, upper, param)
+                    if tmp is not None:
+                        partial.append(Polygon(tmp.T))
+                break
+
+        space_glob[i] = Polygon(pgon.T)
+
+        if not space_glob[i].is_valid:
+            space_glob[i] = space_glob[i].buffer(0)
+
+        # get free space on the right lanelet
+        pgon_right = None
+        width = 0
+
+        if not l.adj_right is None and l.adj_right_same_direction and \
+                (i <= 10 or (i in time[cnt] and types[cnt] == 'right')):
+            for f in free_space[l.adj_right][i]:
+                if intersects_interval((f.bounds[0], f.bounds[2]), space_int):
+                    tmp = np.minimum(f.bounds[2], space_int[1]) - np.maximum(f.bounds[0], space_int[0])
+                    if tmp > width:
+                        pgon_right = deepcopy(f)
+
+            if pgon_right is not None:
+                lower_right = pgon_right.bounds[0] - 0.5 * param['length_max']
+                upper_right = pgon_right.bounds[2] + 0.5 * param['length_max']
+                pgon_right = lanelet2global_(lanelets[l.adj_right], lower_right, upper_right)
+                pgon_right = unite_lanelets_right(pgon, lower, upper, pgon_right, lower_right, upper_right, l)
+                space_glob[i] = space_glob[i].union(pgon_right)
+
+                for p in partially_occupied[l.adj_right][i]:
+                    tmp = partially_occupied_global(p, lanelets[l.adj_right], lower_right, upper_right, param)
+                    if tmp is not None:
+                        partial.append(Polygon(tmp.T))
+
+        # get free space on the left lanelet
+        pgon_left = None
+        width = 0
+
+        if not l.adj_left is None and l.adj_left_same_direction and \
+                (i <= 10 or (i in time[cnt] and types[cnt] == 'left')):
+            for f in free_space[l.adj_left][i]:
+                if intersects_interval((f.bounds[0], f.bounds[2]), space_int):
+                    tmp = np.minimum(f.bounds[2], space_int[1]) - np.maximum(f.bounds[0], space_int[0])
+                    if tmp > width:
+                        pgon_left = deepcopy(f)
+
+            if pgon_left is not None:
+                lower_left = pgon_left.bounds[0] - 0.5 * param['length_max']
+                upper_left = pgon_left.bounds[2] + 0.5 * param['length_max']
+                pgon_left = lanelet2global_(lanelets[l.adj_left], lower_left, upper_left)
+                pgon_left = unite_lanelets_right(pgon_left, lower_left, upper_left, pgon, lower, upper, l)
+                space_glob[i] = space_glob[i].union(pgon_left)
+
+                for p in partially_occupied[l.adj_left][i]:
+                    tmp = partially_occupied_global(p, lanelets[l.adj_left], lower_left, upper_left, param)
+                    if tmp is not None:
+                        partial.append(Polygon(tmp.T))
+
+        # get free space on the successor lanelets
+        pgon_suc = None
+        width = np.maximum(0, upper - l.distance[-1])
+
+        if width > 0:
+            for s in l.successor:
+                lower_suc = 0
+                upper_suc = width
+                if len(free_space[s][i]) > 0 and free_space[s][i][0].bounds[0] < 1e-5:
+                    upper_suc = np.maximum(free_space[s][i][0].bounds[2] + 0.5 * param['length_max'], upper_suc)
+                pgon_tmp = lanelet2global_(lanelets[s], lower_suc, upper_suc,
+                                           suc=width > lanelets[s].distance[-1], lanelets=lanelets)
+                if pgon_suc is None:
+                    pgon_suc = Polygon(pgon_tmp.T)
+                else:
+                    pgon_suc = pgon_suc.union(Polygon(pgon_tmp.T))
+
+                for p in partially_occupied[s][i]:
+                    tmp = partially_occupied_global(p, lanelets[s], lower_suc, upper_suc, param)
+                    if tmp is not None:
+                        partial.append(Polygon(tmp.T))
+
+            if pgon_suc is not None:
+                pgon_suc = unite_lanelets_successor(pgon, pgon_suc)
+                space_glob[i] = space_glob[i].union(pgon_suc)
+
+        # get free space on the predecessor lanelets
+        pgon_pre = None
+
+        if lower < 0:
+            for p in l.predecessor:
+                lower_pre = lower + lanelets[p].distance[-1]
+                upper_pre = lanelets[p].distance[-1]
+                if len(free_space[p][i]) > 0 and free_space[p][i][-1].bounds[2] > lanelets[p].distance[-1]-1e-5:
+                    lower_pre = np.minimum(free_space[p][i][-1].bounds[0] - 0.5 * param['length_max'], lower_pre)
+                pgon_tmp = lanelet2global_(lanelets[p], lower_pre, upper_pre,
+                                           pred=lower + lanelets[p].distance[-1] < 0, lanelets=lanelets)
+                if pgon_pre is None:
+                    pgon_pre = Polygon(pgon_tmp.T)
+                else:
+                    pgon_pre = pgon_pre.union(Polygon(pgon_tmp.T))
+
+                for pr in partially_occupied[p][i]:
+                    tmp = partially_occupied_global(pr, lanelets[p], lower_pre, upper_pre, param)
+                    if tmp is not None:
+                        partial.append(Polygon(tmp.T))
+
+            if pgon_pre is not None:
+                pgon_pre = unite_lanelets_predecessor(pgon, pgon_pre)
+                space_glob[i] = space_glob[i].union(pgon_pre)
+
+        # if initial state is on multiple lanelets, add the space on these lanelets to the free space
+        if plan[i] == plan[0]:
+            for j in range(len(param['x0_lane'])):
+                id = param['x0_lane'][j]
+                if id != plan[0]:
+                    for f in free_space[id][i]:
+                        if f.bounds[0] <= param['x0_set'][j] <= f.bounds[2]:
+                            lower_x0 = f.bounds[0] - 0.5 * param['length_max']
+                            upper_x0 = f.bounds[2] + 0.5 * param['length_max']
+                            pgon = lanelet2global_(lanelets[id], lower_x0, upper_x0)
+                            pgon = Polygon(pgon.T)
+                            if not pgon.is_valid:
+                                pgon = pgon.buffer(0)
+                            space_glob[i] = space_glob[i].union(pgon)
+
+                            for p in partially_occupied[id][i]:
+                                tmp = partially_occupied_global(p, lanelets[id], lower_x0, upper_x0, param)
+                                if tmp is not None:
+                                    partial.append(Polygon(tmp.T))
+
+        # remove partially occupied space from the free space
+        for p in partial:
+            if p.intersects(space_glob[i]):
+                space_glob[i] = space_glob[i].difference(p)
+
+        # increase counter
+        if len(time[cnt]) > 0:
+            if i == time[cnt][-1] and cnt < len(time)-1:
+                cnt = cnt + 1
+        else:
+            if i == ind[cnt] and cnt < len(time)-1:
+                cnt = cnt + 1
+
+    return space_glob
+
+def unite_lanelets_successor(pgon, pgon_suc):
+    """unite a lanelet with its successor lanelet"""
+
+    n = int(pgon.shape[1] / 2)
+
+    # get vertices of the successor polygon in the correct order
+    vx, vy = pgon_suc.exterior.coords.xy
+    V = np.stack((vx, vy))
+
+    if pgon_suc.exterior.is_ccw:
+        V = np.fliplr(V)
+
+    V = remove_duplicate_columns(V)
+
+    if all(V[:, 0] - V[:, -1] < 1e-5):
+        V = V[:, :-1]
+
+    # combine with the polygon for the current lanelet
+    ind1 = np.argmin(np.sum((pgon[:, [n - 1]] - V)**2, axis=0))
+    V = np.concatenate((V[:, ind1:], V[:, :ind1]), axis=1)
+    ind2 = np.argmin(np.sum((pgon[:, [n]] - V) ** 2, axis=0))
+
+    p = np.concatenate((pgon[:, 0:n], V[:, :ind2], pgon[:, n:]), axis=1)
+
+    # construct polygon object
+    pgon = Polygon(p.T)
+
+    if not pgon.is_valid:
+        pgon = pgon.buffer(0)
+
+    return pgon
+
+def unite_lanelets_predecessor(pgon, pgon_pre):
+    """unite a lanelet with its predecessor lanelet"""
+
+    n = int(pgon.shape[1] / 2)
+
+    # get vertices of the predecessor polygon in the correct order
+    vx, vy = pgon_pre.exterior.coords.xy
+    V = np.stack((vx, vy))
+
+    if pgon_pre.exterior.is_ccw:
+        V = np.fliplr(V)
+
+    V = remove_duplicate_columns(V)
+
+    if all(V[:, 0] - V[:, -1] < 1e-5):
+        V = V[:, :-1]
+
+    # combine with the polygon for the current lanelet
+    ind1 = np.argmin(np.sum((pgon[:, [-1]] - V)**2, axis=0))
+    V = np.concatenate((V[:, ind1:], V[:, :ind1]), axis=1)
+    ind2 = np.argmin(np.sum((pgon[:, [0]] - V) ** 2, axis=0))
+
+    p = np.concatenate((V[:, :ind2+1], pgon[:, 1:-1]), axis=1)
+
+    # construct polygon object
+    pgon = Polygon(p.T)
+
+    if not pgon.is_valid:
+        pgon = pgon.buffer(0)
+
+    return pgon
+
+def unite_lanelets_right(pgon, lower, upper, pgon_right, lower_right, upper_right, lanelet):
+    """unite a lanelet with its right neighbor"""
+
+    n = int(pgon.shape[1] / 2)
+    n_right = int(pgon_right.shape[1] / 2)
+
+    # handle left side of the resulting polygon
+    if upper >= lanelet.distance[-1] and upper_right >= lanelet.distance[-1]:
+        p = pgon[:, 0:n+1]
+        index = n_right
+    elif upper > upper_right:
+        point, ind = closest_line_segment(pgon[:, n:], pgon_right[:, [n_right-1]])
+        p = np.concatenate((pgon[:, :ind + n + 1], point), axis=1)
+        index = n_right-1
+    else:
+        point, ind = closest_line_segment(pgon_right[:, 0:n_right], pgon[:, [n]])
+        p = np.concatenate((pgon[:, 0:n+1], point), axis=1)
+        index = ind+1
+
+    # concatenate with the right side of the resulting polygon
+    if lower <= 0 and lower_right <= 0:
+        p = np.concatenate((p, pgon_right[:, index:]), axis=1)
+    elif lower < lower_right:
+        p = np.concatenate((p, pgon_right[:, index:]), axis=1)
+        point, ind = closest_line_segment(pgon[:, n:], pgon_right[:, [0]])
+        p = np.concatenate((p, point, pgon[:, ind+n+1:]), axis=1)
+    else:
+        p = np.concatenate((p, pgon_right[:, index:]), axis=1)
+        point, ind = closest_line_segment(pgon_right[:, 0:n_right], pgon[:, [-1]])
+        p = np.concatenate((p, pgon_right[:, 0:ind+1], point), axis=1)
+
+    p = remove_duplicate_columns(p)
+
+    # construct polygon object
+    pgon = Polygon(p.T)
+
+    if not pgon.is_valid:
+        pgon = pgon.buffer(0)
+
+    return pgon
+
+def remove_duplicate_columns(M):
+    """remove all duplicate neighbouring columns from a matrix"""
+
+    ind = [0]
+    cnt = 0
+
+    for i in range(1, M.shape[1]):
+        if any(abs(M[:, cnt] - M[:, i]) > 1e-5):
+            cnt = cnt + 1
+            ind.append(i)
+
+    return M[:, ind]
+
+def closest_line_segment(line, point):
+    """compute the line segment that is closest to the current point"""
+
+    dist = np.inf
+
+    # loop over all line segments
+    for i in range(line.shape[1]-1):
+        dist_, p_ = distance_line_point(line[:, i:i+2], point)
+        if dist_ < dist:
+            dist = dist_
+            ind = i
+            p = p_
+
+    if dist == np.inf:
+        p = line[:, [0]]
+        ind = 0
+
+    return p, ind
+
+def distance_line_point(line, point):
+    """compute the minimum distance between a line and a point"""
+
+    # project point onto line
+    diff = line[:, 0] - line[:, 1]
+
+    if np.linalg.norm(np.expand_dims(diff, axis=1)) > 1e-5:
+
+        c = np.array([[diff[1]], [-diff[0]]])
+        d = c.T @ line[:, [0]]
+
+        A = np.eye(2) - c @ c.T
+        b = d * c
+
+        p_proj = A @ point + b
+
+        dist_proj = np.linalg.norm(point - p_proj)
+    else:
+        dist_proj = np.inf
+
+    # compute distances
+    dist1 = np.linalg.norm(point - line[:, [0]])
+    dist2 = np.linalg.norm(point - line[:, [1]])
+
+    # return point with minimum distance
+    if dist1 < dist2:
+        if dist1 < dist_proj:
+            return dist1, line[:, [0]]
+        else:
+            return dist_proj, p_proj
+    else:
+        if dist2 < dist_proj:
+            return dist2, line[:, [1]]
+        else:
+            return dist_proj, p_proj
+
+def partially_occupied_global(space, lanelet, lower, upper, param):
+    """convert the partially occupied space to the global coordinate system"""
+
+    # compute lower and upper bound for the partially occupied space
+    lower_par = space['space'].bounds[0]
+    if lower_par > 1e-5:
+        lower_par = lower_par + 0.5*param['length_max']
+
+    upper_par = space['space'].bounds[2]
+    if upper_par < lanelet.distance[-1] - 1e-5:
+        upper_par = upper_par - 0.5*param['length_max']
+
+    # convert to global coordinate frame
+    if lower_par <= upper_par and intersects_interval((lower_par, upper_par), (lower, upper)):
+
+        width = space['width']
+
+        if space['side'] == 'right':
+            width = (width[0] - 0.1, width[1])
+        else:
+            width = (width[0], width[1] + 0.1)
+
+        return lanelet2global_(lanelet, lower_par, upper_par, width=width)
+    else:
+        return None
+
 def free_space_global(space, plan, time, lanelets, free_space, partially_occupied, param):
     """compute the drivable space in the global coordinate frame"""
 
@@ -2218,6 +2606,101 @@ def lanelet2global(space, plan, lanelets, width=None):
         space_xy.append(pgon)
 
     return space_xy
+
+def lanelet2global_(lanelet, lower, upper, width=None, pred=False, suc=False, lanelets=None):
+    """transform free space from lanelet coordinate system to global coordinate system"""
+
+    left_vertices = []
+    right_vertices = []
+
+    # catch the case where space exceeds over the lanelet bounds
+    lower_ = lower
+    upper_ = upper
+
+    if lower < lanelet.distance[0]:
+        lower = 0
+
+    if upper > lanelet.distance[-1]:
+        upper = lanelet.distance[-1]
+
+    # loop over the single segments of the lanelet
+    for j in range(0, len(lanelet.distance) - 1):
+
+        if lower >= lanelet.distance[j] and lower <= lanelet.distance[j + 1]:
+            frac = (lower - lanelet.distance[j]) / (lanelet.distance[j + 1] - lanelet.distance[j])
+
+            d = lanelet.left_vertices[j + 1] - lanelet.left_vertices[j]
+            p_left = lanelet.left_vertices[j] + d * frac
+            left_vertices.append(p_left)
+
+            d = lanelet.right_vertices[j + 1] - lanelet.right_vertices[j]
+            p_right = lanelet.right_vertices[j] + d * frac
+            right_vertices.append(p_right)
+
+        if lower <= lanelet.distance[j] <= upper:
+            p_left = lanelet.left_vertices[j]
+            left_vertices.append(p_left)
+
+            p_right = lanelet.right_vertices[j]
+            right_vertices.append(p_right)
+
+        if upper >= lanelet.distance[j] and upper <= lanelet.distance[j + 1]:
+            frac = (upper - lanelet.distance[j]) / (lanelet.distance[j + 1] - lanelet.distance[j])
+
+            d = lanelet.left_vertices[j + 1] - lanelet.left_vertices[j]
+            p_left = lanelet.left_vertices[j] + d * frac
+            left_vertices.append(p_left)
+
+            d = lanelet.right_vertices[j + 1] - lanelet.right_vertices[j]
+            p_right = lanelet.right_vertices[j] + d * frac
+            right_vertices.append(p_right)
+
+            break
+
+    # restrict to the specified width
+    if width is not None:
+        for i in range(len(left_vertices)):
+            center = 0.5 * (left_vertices[i] + right_vertices[i])
+            d = left_vertices[i] - right_vertices[i]
+            d = d / np.linalg.norm(d)
+            left_vertices[i] = center + width[0] * d
+            right_vertices[i] = center + width[1] * d
+
+    # construct the resulting polygon in the global coordinate system
+    right_vertices.reverse()
+    left_vertices.extend(right_vertices)
+    pgon = np.asarray(left_vertices).T
+
+    # consider successor lanelets
+    if suc and upper_ > lanelet.distance[-1]:
+        pgon_suc = None
+        for s in lanelet.successor:
+            pgon_tmp = lanelet2global_(lanelets[s], 0, upper_ - lanelet.distance[-1])
+            if pgon_suc is None:
+                pgon_suc = Polygon(pgon_tmp.T)
+            else:
+                pgon_suc = pgon_suc.union(Polygon(pgon_tmp.T))
+        if pgon_suc is not None:
+            pgon = unite_lanelets_successor(pgon, pgon_suc)
+            vx, vy = pgon.exterior.xy
+            pgon = np.stack((vx, vy))
+
+    # consider predessesor lanelets
+    if pred and lower_ < 0:
+        pgon_pre = None
+        for p in lanelet.predecessor:
+            pgon_tmp = lanelet2global_(lanelets[p], lanelets[p].distance[-1] + lower_, lanelets[p].distance[-1])
+            if pgon_pre is None:
+                pgon_pre = Polygon(pgon_tmp.T)
+            else:
+                pgon_pre = pgon_pre.union(Polygon(pgon_tmp.T))
+        if pgon_pre is not None:
+            pgon = unite_lanelets_predecessor(pgon, pgon_pre)
+            vx, vy = pgon.exterior.xy
+            pgon = np.stack((vx, vy))
+
+    return pgon
+
 
 def union_robust(pgon1, pgon2):
     """robust union of two polygons removing small unwanted fragments"""
