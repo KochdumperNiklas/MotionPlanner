@@ -57,7 +57,7 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     time_lane = time_steps_lane_change(space, plan, lanelets, free_space)
 
     # determine free space in the global coordinate frame
-    space_glob = free_space_global_(space, plan, time_lane, lanelets, free_space, partially_occupied, param)
+    space_glob = free_space_global(space, plan, time_lane, lanelets, free_space, partially_occupied, param)
 
     # shrink space by intersecting with the forward reachable set
     space = reduce_space(space, plan, lanelets, param)
@@ -1610,7 +1610,7 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
 
     return plan, space
 
-def free_space_global_(space, plan, time, lanelets, free_space, partially_occupied, param):
+def free_space_global(space, plan, time, lanelets, free_space, partially_occupied, param):
     """compute the drivable space in the global coordinate frame"""
 
     # check if the free space around the reference trajectory should be computed
@@ -1652,7 +1652,7 @@ def free_space_global_(space, plan, time, lanelets, free_space, partially_occupi
             if intersects_interval((f.bounds[0], f.bounds[2]), space_int):
                 lower = f.bounds[0] - 0.5*param['length_max']
                 upper = f.bounds[2] + 0.5*param['length_max']
-                pgon = lanelet2global_(l, lower, upper)
+                pgon = lanelet2global(l, lower, upper)
 
                 for p in partially_occupied[plan[i]][i]:
                     tmp = partially_occupied_global(p, l, lower, upper, param)
@@ -1680,7 +1680,7 @@ def free_space_global_(space, plan, time, lanelets, free_space, partially_occupi
             if pgon_right is not None:
                 lower_right = pgon_right.bounds[0] - 0.5 * param['length_max']
                 upper_right = pgon_right.bounds[2] + 0.5 * param['length_max']
-                pgon_right = lanelet2global_(lanelets[l.adj_right], lower_right, upper_right)
+                pgon_right = lanelet2global(lanelets[l.adj_right], lower_right, upper_right)
                 pgon_right = unite_lanelets_right(pgon, lower, upper, pgon_right, lower_right, upper_right, l)
                 space_glob[i] = space_glob[i].union(pgon_right)
 
@@ -1704,7 +1704,7 @@ def free_space_global_(space, plan, time, lanelets, free_space, partially_occupi
             if pgon_left is not None:
                 lower_left = pgon_left.bounds[0] - 0.5 * param['length_max']
                 upper_left = pgon_left.bounds[2] + 0.5 * param['length_max']
-                pgon_left = lanelet2global_(lanelets[l.adj_left], lower_left, upper_left)
+                pgon_left = lanelet2global(lanelets[l.adj_left], lower_left, upper_left)
                 pgon_left = unite_lanelets_right(pgon_left, lower_left, upper_left, pgon, lower, upper, l)
                 space_glob[i] = space_glob[i].union(pgon_left)
 
@@ -1723,8 +1723,8 @@ def free_space_global_(space, plan, time, lanelets, free_space, partially_occupi
                 upper_suc = width
                 if len(free_space[s][i]) > 0 and free_space[s][i][0].bounds[0] < 1e-5:
                     upper_suc = np.maximum(free_space[s][i][0].bounds[2] + 0.5 * param['length_max'], upper_suc)
-                pgon_tmp = lanelet2global_(lanelets[s], lower_suc, upper_suc,
-                                           suc=width > lanelets[s].distance[-1], lanelets=lanelets)
+                pgon_tmp = lanelet2global(lanelets[s], lower_suc, upper_suc,
+                                          suc=width > lanelets[s].distance[-1], lanelets=lanelets)
                 if pgon_suc is None:
                     pgon_suc = Polygon(pgon_tmp.T)
                 else:
@@ -1748,8 +1748,8 @@ def free_space_global_(space, plan, time, lanelets, free_space, partially_occupi
                 upper_pre = lanelets[p].distance[-1]
                 if len(free_space[p][i]) > 0 and free_space[p][i][-1].bounds[2] > lanelets[p].distance[-1]-1e-5:
                     lower_pre = np.minimum(free_space[p][i][-1].bounds[0] - 0.5 * param['length_max'], lower_pre)
-                pgon_tmp = lanelet2global_(lanelets[p], lower_pre, upper_pre,
-                                           pred=lower + lanelets[p].distance[-1] < 0, lanelets=lanelets)
+                pgon_tmp = lanelet2global(lanelets[p], lower_pre, upper_pre,
+                                          pred=lower + lanelets[p].distance[-1] < 0, lanelets=lanelets)
                 if pgon_pre is None:
                     pgon_pre = Polygon(pgon_tmp.T)
                 else:
@@ -1773,7 +1773,7 @@ def free_space_global_(space, plan, time, lanelets, free_space, partially_occupi
                         if f.bounds[0] <= param['x0_set'][j] <= f.bounds[2]:
                             lower_x0 = f.bounds[0] - 0.5 * param['length_max']
                             upper_x0 = f.bounds[2] + 0.5 * param['length_max']
-                            pgon = lanelet2global_(lanelets[id], lower_x0, upper_x0)
+                            pgon = lanelet2global(lanelets[id], lower_x0, upper_x0)
                             pgon = Polygon(pgon.T)
                             if not pgon.is_valid:
                                 pgon = pgon.buffer(0)
@@ -1994,171 +1994,9 @@ def partially_occupied_global(space, lanelet, lower, upper, param):
         else:
             width = (width[0], width[1] + 0.1)
 
-        return lanelet2global_(lanelet, lower_par, upper_par, width=width)
+        return lanelet2global(lanelet, lower_par, upper_par, width=width)
     else:
         return None
-
-def free_space_global(space, plan, time, lanelets, free_space, partially_occupied, param):
-    """compute the drivable space in the global coordinate frame"""
-
-    # check if the free around the reference trajectory should be computed
-    if not param['compute_free_space']:
-        return None
-
-    # increase free space by the vehicle dimensions
-    space = increase_free_space(space, param)
-    free_space = increase_free_space(free_space, param)
-
-    # determine indices for all lane changes
-    plan = np.asarray(plan)
-    ind = np.where(plan[:-1] != plan[1:])[0]
-
-    time = [[] for i in range(len(ind))]
-
-    # get drivable area (without space for lane changes) in the global coordinate frame
-    space_glob = lanelet2global(space, plan, lanelets)
-
-    # add free space on the same lanelet to drive on
-    for i in range(0, len(plan)):
-        for f in free_space[plan[i]][i]:
-            if f.intersects(space[i]):
-                pgon = lanelet2global([f], [plan[i]], lanelets)
-                space_glob[i] = union_robust(space_glob[i], pgon[0])
-
-    # add space from left and right lanelet for the beginning since the initial position is not necessarily in lanelet
-    for i in range(min(10, len(plan))):
-
-        if not lanelets[plan[i]].adj_right is None and lanelets[plan[i]].adj_right_same_direction:
-            for f in free_space[lanelets[plan[i]].adj_right][i]:
-                if f.intersects(space[i]):
-                    pgon = lanelet2global([f], [lanelets[plan[i]].adj_right], lanelets)
-                    space_glob[i] = union_robust(space_glob[i], pgon[0])
-
-        if not lanelets[plan[i]].adj_left is None and lanelets[plan[i]].adj_left_same_direction:
-            for f in free_space[lanelets[plan[i]].adj_left][i]:
-                if f.intersects(space[i]):
-                    pgon = lanelet2global([f], [lanelets[plan[i]].adj_left], lanelets)
-                    space_glob[i] = union_robust(space_glob[i], pgon[0])
-
-        for suc in lanelets[plan[i]].successor:
-            for f in free_space[suc][i]:
-                pgon = translate(f, lanelets[plan[i]].distance[-1], 0)
-                if pgon.intersects(space[i]):
-                    pgon = lanelet2global([f], [suc], lanelets)
-                    space_glob[i] = union_robust(space_glob[i], pgon[0])
-
-        for suc in lanelets[plan[i]].predecessor:
-            for f in free_space[suc][i]:
-                pgon = translate(f, -lanelets[suc].distance[-1], 0)
-                if pgon.intersects(space[i]):
-                    pgon = lanelet2global([f], [suc], lanelets)
-                    space_glob[i] = union_robust(space_glob[i], pgon[0])
-
-    # if initial state is on multiple lanelets, add the space on these lanelets to the free space
-    for i in range(len(param['x0_lane'])):
-        l = param['x0_lane'][i]
-        if l != plan[0]:
-            cnt = 0
-            while cnt < len(plan) and plan[cnt] == plan[0]:
-                for f in free_space[l][cnt]:
-                    if f.bounds[0] <= param['x0_set'][i] <= f.bounds[2]:
-                        pgon = lanelet2global([f], [l], lanelets)
-                        if pgon[0].intersects(space_glob[cnt]):
-                            space_glob[cnt] = union_robust(space_glob[cnt], pgon[0])
-                cnt = cnt + 1
-
-    # loop over all lane changes
-    for i in range(len(ind)):
-
-        lanelet_1 = lanelets[plan[ind[i]]]
-        lanelet_2 = lanelets[plan[ind[i]+1]]
-
-        # loop backward in time until previous lane change
-        if i == 0:
-            start = 0
-        else:
-            start = ind[i-1]
-
-        for j in range(ind[i], start-1, -1):
-
-            if plan[ind[i]+1] in lanelet_1.successor:
-
-                if space[j].bounds[2] >= lanelet_1.distance[-1]:
-
-                    for f in free_space[lanelet_2.lanelet_id][j]:
-                        if f.bounds[0] <= 0:
-                            pgon = lanelet2global([f], [lanelet_2.lanelet_id], lanelets)
-                            space_glob[j] = union_robust(space_glob[j], pgon[0])
-                            time[i].append(j)
-                else:
-                    break
-
-            else:
-                intersection = False
-
-                for f in free_space[lanelet_2.lanelet_id][j]:
-                    if f.intersects(space[j]):
-                        pgon = lanelet2global([f], [lanelet_2.lanelet_id], lanelets)
-                        space_glob[j] = union_robust(space_glob[j], pgon[0])
-                        intersection = True
-                        time[i].append(j)
-
-                if not intersection:
-                    break
-
-        # loop forward in time until the next lane change
-        if i == len(ind)-1:
-            end = len(space)-1
-        else:
-            end = ind[i+1]
-
-        for j in range(ind[i], end):
-
-            if plan[ind[i]+1] in lanelet_1.successor:
-
-                if space[j].bounds[2] <= 0:
-
-                    for f in free_space[lanelet_1.lanelet_id][j]:
-                        if f.bounds[2] >= lanelet_1.distance[-1]:
-                            pgon = lanelet2global([f], [lanelet_1.lanelet_id], lanelets)
-                            space_glob[j] = union_robust(space_glob[j], pgon[0])
-                            time[i].append(j)
-                else:
-                    break
-
-            else:
-                intersection = False
-
-                for f in free_space[lanelet_1.lanelet_id][j]:
-                    if f.intersects(space[j]):
-                        pgon = lanelet2global([f], [lanelet_1.lanelet_id], lanelets)
-                        space_glob[j] = union_robust(space_glob[j], pgon[0])
-                        intersection = True
-                        time[i].append(j)
-
-                if not intersection:
-                    break
-
-        # sort time steps where lane change is possible
-        time[i] = np.asarray(time[i])
-        time[i] = np.sort(time[i])
-
-    # remove partially occupied space from the free space
-    lanes = np.unique(plan)
-
-    for i in range(len(space_glob)):
-        for l in lanes:
-            for p in partially_occupied[l][i]:
-
-                p1 = translate(p['space'], -0.5*param['length_max'], 0)
-                p2 = translate(p['space'], 0.5*param['length_max'], 0)
-
-                sp = lanelet2global([p1.intersection(p2)], [l], lanelets, p['width'])[0]
-
-                if sp.intersects(space_glob[i]):
-                    space_glob[i] = space_glob[i].difference(sp)
-
-    return space_glob
 
 def time_steps_lane_change(space, plan, lanelets, free_space):
     """compute the time steps in which a lane change is possible"""
@@ -2509,105 +2347,7 @@ def offsets_lanelet_sequence(seq, lanelets):
 
     return offset
 
-def lanelet2global(space, plan, lanelets, width=None):
-    """transform free space from lanelet coordinate system to global coordinate system"""
-
-    space_xy = []
-
-    # loop over all time steps
-    for i in range(0, len(space)):
-
-        # initialization
-        lanelet = lanelets[plan[i]]
-
-        lower = space[i].bounds[0]
-        upper = space[i].bounds[2]
-
-        left_vertices = []
-        right_vertices = []
-        pgons = []
-
-        # catch the case where space exceeds over the lanelet bounds
-        if lower < lanelet.distance[0]:
-            for pd in lanelet.predecessor:
-                d = lanelets[pd].distance[-1]
-                pgons.append(lanelet2global([interval2polygon([d + lower, -1], [d, 1])], [pd], lanelets, width)[0])
-            lower = 0
-
-        if upper > lanelet.distance[-1]:
-            d = upper - lanelet.distance[-1]
-            for sc in lanelet.successor:
-                pgons.append(lanelet2global([interval2polygon([0, -1], [d, 1])], [sc], lanelets, width)[0])
-            upper = lanelet.distance[-1]
-
-        # loop over the single segments of the lanelet
-        for j in range(0, len(lanelet.distance)-1):
-
-            if lower >= lanelet.distance[j] and lower <= lanelet.distance[j+1]:
-
-                frac = (lower - lanelet.distance[j])/(lanelet.distance[j+1] - lanelet.distance[j])
-
-                d = lanelet.left_vertices[j + 1] - lanelet.left_vertices[j]
-                p_left = lanelet.left_vertices[j] + d * frac
-                left_vertices.append(Point(p_left[0], p_left[1]))
-
-                d = lanelet.right_vertices[j + 1] - lanelet.right_vertices[j]
-                p_right = lanelet.right_vertices[j] + d * frac
-                right_vertices.append(Point(p_right[0], p_right[1]))
-
-            if lower <= lanelet.distance[j] <= upper:
-
-                p_left = lanelet.left_vertices[j]
-                left_vertices.append(Point(p_left[0], p_left[1]))
-
-                p_right = lanelet.right_vertices[j]
-                right_vertices.append(Point(p_right[0], p_right[1]))
-
-            if upper >= lanelet.distance[j] and upper <= lanelet.distance[j+1]:
-
-                frac = (upper - lanelet.distance[j]) / (lanelet.distance[j + 1] - lanelet.distance[j])
-
-                d = lanelet.left_vertices[j + 1] - lanelet.left_vertices[j]
-                p_left = lanelet.left_vertices[j] + d * frac
-                left_vertices.append(Point(p_left[0], p_left[1]))
-
-                d = lanelet.right_vertices[j + 1] - lanelet.right_vertices[j]
-                p_right = lanelet.right_vertices[j] + d * frac
-                right_vertices.append(Point(p_right[0], p_right[1]))
-
-                break
-
-        # restrict to the specified width
-        if width is not None:
-            for i in range(len(left_vertices)):
-                left = np.array([left_vertices[i].x, left_vertices[i].y])
-                right = np.array([right_vertices[i].x, right_vertices[i].y])
-                center = 0.5*(left + right)
-                d = left - right
-                d = d / np.linalg.norm(d)
-                left = center + width[0]*d
-                right = center + width[1]*d
-                left_vertices[i] = Point(left[0], left[1])
-                right_vertices[i] = Point(right[0], right[1])
-
-        # construct the resulting polygon in the global coordinate system
-        right_vertices.reverse()
-        left_vertices.extend(right_vertices)
-
-        pgon = Polygon(left_vertices)
-
-        if not pgon.is_valid:
-            pgon = pgon.buffer(0)
-
-        # unite with polygons from predecessor and successor lanelets
-        for p in pgons:
-            pgon = union_robust(pgon, p)
-
-        space_xy.append(pgon)
-
-    return space_xy
-
-def lanelet2global_(lanelet, lower, upper, width=None, pred=False, suc=False, lanelets=None):
+def lanelet2global(lanelet, lower, upper, width=None, pred=False, suc=False, lanelets=None):
     """transform free space from lanelet coordinate system to global coordinate system"""
 
     left_vertices = []
@@ -2675,7 +2415,7 @@ def lanelet2global_(lanelet, lower, upper, width=None, pred=False, suc=False, la
     if suc and upper_ > lanelet.distance[-1]:
         pgon_suc = None
         for s in lanelet.successor:
-            pgon_tmp = lanelet2global_(lanelets[s], 0, upper_ - lanelet.distance[-1])
+            pgon_tmp = lanelet2global(lanelets[s], 0, upper_ - lanelet.distance[-1])
             if pgon_suc is None:
                 pgon_suc = Polygon(pgon_tmp.T)
             else:
@@ -2689,7 +2429,7 @@ def lanelet2global_(lanelet, lower, upper, width=None, pred=False, suc=False, la
     if pred and lower_ < 0:
         pgon_pre = None
         for p in lanelet.predecessor:
-            pgon_tmp = lanelet2global_(lanelets[p], lanelets[p].distance[-1] + lower_, lanelets[p].distance[-1])
+            pgon_tmp = lanelet2global(lanelets[p], lanelets[p].distance[-1] + lower_, lanelets[p].distance[-1])
             if pgon_pre is None:
                 pgon_pre = Polygon(pgon_tmp.T)
             else:
