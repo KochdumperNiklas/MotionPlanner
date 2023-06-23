@@ -27,9 +27,12 @@ def loadAROCcontroller(MA, primitives, x0):
         file = os.path.join(path, 'controller' + str(p + 1) + '.mat')
         mat = loadmat(file)
 
+        if len(mat['parallelo']) == 2:
+            mat['alpha'] = [mat['alpha']]
+
         # create controller object
         time = t + np.linspace(0, MA.primitives[p].tFinal, len(mat['parallelo']))
-        controllers.append(GeneratorSpaceController(mat['U'], mat['alpha'], mat['parallelo'], time, x))
+        controllers.append(GeneratorSpaceController(mat['U'], mat['parallelo'], mat['alpha'], time, x))
 
         # update state and time
         phi = x[3]

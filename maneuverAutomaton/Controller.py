@@ -38,6 +38,7 @@ class GeneratorSpaceController:
         self.parallelo = parallelo
         self.alpha = alpha
         self.time = time
+        self.cnt = -1
 
         # initialize transformation x_local = T*(x - x0) to local coordinate frame
         phi = x0[3]
@@ -55,7 +56,7 @@ class GeneratorSpaceController:
         if self.time[self.cnt] - 1e-10 <= time <= self.time[self.cnt + 1] + 1e-10:
             dt = (self.time[self.cnt+1] - self.time[self.cnt])/len(self.alpha[self.cnt])
             ind = np.floor((time - self.time[self.cnt]) / dt)
-            u = self.u[:, ind]
+            u = self.u[:, int(ind)]
         else:
             raise Exception('One of the time points required for computing the control law was skipped!')
 
@@ -65,9 +66,9 @@ class GeneratorSpaceController:
         """update the control law"""
 
         # initialization
-        P = self.parallelo[self.cnt]
-        alpha = self.alpha[self.cnt]
-        u = np.zeros((self.U.Z.shape[0], len(alpha)))
+        P = self.parallelo[self.cnt+1]
+        alpha = self.alpha[self.cnt+1]
+        u = np.zeros((self.U['Z'].shape[0], len(alpha)))
 
         # transform state to local coordinate frame
         x_local = self.T @ (x - self.x0)
@@ -80,7 +81,7 @@ class GeneratorSpaceController:
 
         # compute control inputs for all time steps
         for i in range(len(alpha)):
-            u[:, i] = self.U.Z[:, 0] + self.U.Z[:, 1:] * (alpha[i][:, [0]] + alpha[i][:, 1:] * beta)
+            u[:, [i]] = self.U['Z'][:, [0]] + self.U['Z'][:, 1:] @ (alpha[i][:, [0]] + alpha[i][:, 1:] @ beta)
 
         # store the updated control law
         self.cnt = self.cnt + 1

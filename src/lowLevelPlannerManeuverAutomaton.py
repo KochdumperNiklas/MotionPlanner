@@ -7,10 +7,12 @@ from shapely.affinity import translate
 from shapely.geometry import Point
 from shapely.geometry import Polygon
 import matplotlib.pyplot as plt
+from scipy.integrate import solve_ivp
 
 import sys
 sys.path.append('./maneuverAutomaton/')
 from ManeuverAutomaton import ManeuverAutomaton
+from loadAROCcontroller import loadAROCcontroller
 
 # planning horizon for A*-search
 HORIZON = 2
@@ -73,8 +75,12 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
             # check if goal set has been reached
             res, ind = goal_check(node, primitive, param)
             if res:
-                u = extract_control_inputs(node, MA.primitives)
-                return node.x[:, :ind], u[:, :ind]
+                if timepoint:
+                    u = extract_control_inputs(node, MA.primitives)
+                    return node.x[:, :ind], u[:, :ind]
+                else:
+                    x, u = simulate_controller(MA, planning_problem, node, param)
+                    return x, u
 
             # precompute transformation matrix for speed-up
             phi = node.x[3, -1]
@@ -137,6 +143,34 @@ def goal_check(node, primitive, param):
                     return True, i
 
     return False, None
+
+def simulate_controller(MA, planning_problem, node, param):
+
+    # construct initial state
+    tmp = list(planning_problem.planning_problem_dict.values())[0].initial_state
+    x0 = np.array([tmp.position[0], tmp.position[1], tmp.velocity, tmp.orientation])
+
+    # load controller object
+    controller = loadAROCcontroller(MA, node.primitives, x0)
+
+    # system dynamics
+    ode = lambda t, x, u: [x[2] * np.cos(x[3]),
+                           x[2] * np.sin(x[3]),
+                           u[0],
+                           x[2] * np.tan(u[1]) / param['wheelbase']]
+
+    # simulate the controlled system
+    x = np.zeros(node.x.shape)
+    u = np.zeros((2, node.x.shape[1]-1))
+
+    x[:, 0] = x0
+
+    for i in range(node.x.shape[1]-1):
+        u[:, i] = controller.get_control_input(i*param['time_step'], x[:, [i]])
+        sol = solve_ivp(ode, [0, param['time_step']], x[:, i], args=(u[:, i], ), dense_output=True)
+        x[:, i+1] = sol.sol(param['time_step'])
+
+    return x, u
 
 def extract_control_inputs(node, primitives):
     """construct the sequence of control inputs for the given node"""
