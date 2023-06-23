@@ -2206,7 +2206,56 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
                 p = (1-w) * center_traj[i][j] + w * center_traj[i+1][j]
                 ref_traj[:, j] = p
 
+    # extend reference trajectory by velocity and orientation
+    velocity = velocity_reference_trajectory(ref_traj, param)
+    orientation = orientation_reference_trajectory(ref_traj, param)
+
+    ref_traj = np.concatenate((ref_traj, np.expand_dims(velocity, axis=0), np.expand_dims(orientation, axis=0)), axis=0)
+
     return ref_traj, plan
+
+def orientation_reference_trajectory(ref_traj, param):
+    """compute orientation for the reference trajectory"""
+
+    # compute orientation
+    orientation = np.zeros((ref_traj.shape[1], ))
+    orientation[0] = param['orientation']
+
+    for i in range(1, ref_traj.shape[1]):
+        if i == ref_traj.shape[1] - 1:
+            diff = ref_traj[:, i] - ref_traj[:, i - 1]
+            orientation[i] = np.arctan2(diff[1], diff[0])
+        else:
+            diff1 = ref_traj[:, i + 1] - ref_traj[:, i]
+            diff2 = ref_traj[:, i] - ref_traj[:, i - 1]
+            orientation[i] = 0.5 * (np.arctan2(diff1[1], diff1[0]) + np.arctan2(diff2[1], diff2[0]))
+
+    # avoid jumps by 2*pi
+    for i in range(len(orientation) - 1):
+        n = round(abs(orientation[i + 1] - orientation[i]) / (2 * np.pi))
+        if orientation[i + 1] - orientation[i] > 3:
+            orientation[i + 1] = orientation[i + 1] - n * 2 * np.pi
+        elif orientation[i] - orientation[i + 1] > 3:
+            orientation[i + 1] = orientation[i + 1] + n * 2 * np.pi
+
+    return orientation
+
+def velocity_reference_trajectory(ref_traj, param):
+    """comptue the velocity for the reference trajectory"""
+
+    # compute velocity
+    velocity = np.zeros((ref_traj.shape[1], ))
+    velocity[0] = param['v_init']
+
+    for i in range(1, ref_traj.shape[1]):
+        if i < ref_traj.shape[1]-1:
+            v1 = np.linalg.norm(ref_traj[:, i + 1] - ref_traj[:, i]) / param['time_step']
+            v2 = np.linalg.norm(ref_traj[:, i] - ref_traj[:, i-1]) / param['time_step']
+            velocity[i] = 0.5*(v1 + v2)
+        else:
+            velocity[i] = np.linalg.norm(ref_traj[:, i] - ref_traj[:, i-1]) / param['time_step']
+
+    return velocity
 
 def correct_centerline(traj, lanelet, param):
     """correct the centerline (since middle is often not the best line for collision avoidance)"""

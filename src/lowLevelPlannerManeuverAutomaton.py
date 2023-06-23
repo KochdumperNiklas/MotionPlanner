@@ -207,7 +207,7 @@ def expand_node(node, primitive, ind, ref_traj, fixed, T):
     else:
         index = range(ind, ref_traj.shape[1])
 
-    cost = node.cost + np.sum((ref_traj[:, index] - x[0:2, index])**2)
+    cost = node.cost + np.sum((ref_traj[0:2, index] - x[0:2, index])**2)
 
     if len(primitives) <= len(fixed) and primitives[-1] != fixed[len(primitives)-1]:
         cost = cost + 1000
