@@ -1,3 +1,5 @@
+warning('off');
+
 % vehicle parameter
 s_max = 1;                          % maximum steering angle [rad]
 a_max = 9;                          % maximum acceleration [m/s^2]
@@ -11,9 +13,9 @@ dt = 0.1;
 % controller settings
 Opts = [];
 
-Opts.N = 10;                        % number of time steps
-Opts.Ninter = 3;                    % number of intermediate time steps
-Opts.reachSteps = 5;                % number of reachability steps
+Opts.N = 1;                         % number of time steps
+Opts.Ninter = 10;                   % number of intermediate time steps
+Opts.reachSteps = 10;                % number of reachability steps
 Opts.Q = diag([1 5 1 10]);          % state weigthing matrix
 
 Opts.cora.tensorOrder = 3;
@@ -27,11 +29,11 @@ width = [a_max;s_max];
 U_max = interval(-width,width);
 
 % desired set of control inputs
-width = [8;1];
+width = [8;0.4];
 U_des = interval(-width,width);
 
 % set of uncertain disturbances
-width = [0.5;0.02];
+width = [0;0];
 Param.W = interval(-width,width);
 
 % initial set of states
@@ -53,11 +55,10 @@ if ~isfolder(pathFail)
 end
 
 % acceleration
-accelerations = [-8, -4, -2, -1.2, -0.8, -0.4, 0, 0.4, 0.8, 1.2, 2, 4, 8];
+accelerations = [0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 2, -2, 4, -4, 8, -8];
 
 % desired final orientation
-orientation = [-1, -0.8, -0.6, -0.4, -0.3, -0.2, -0.1, 0, ...
-                                        0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1];
+orientation = [0, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1];
 
 % velocity range
 v_start = 0;
@@ -100,8 +101,10 @@ parfor i = 1:length(v)
 
                 o = orientation(k);
                 name = ['primitive_',num2str(i),'_',num2str(j),'_',num2str(k),'.mat'];
+                nameMirror = ['primitive_',num2str(i),'_',num2str(j),'_',num2str(k + length(orientation)),'.mat'];
                 fileSuccess = fullfile(pathSuccess,name);
                 fileFail = fullfile(pathFail,name);
+                fileMirror = fullfile(pathSuccess,nameMirror);
 
                 if ~isfile(fileFail) && ~isfile(fileSuccess) && (o == 0 || abs(v_init * tFinal_ + 0.5*acc * tFinal_^2) > 0)
 
@@ -122,21 +125,6 @@ parfor i = 1:length(v)
 
                         [t,x] = ode45(fun,tspan,x0);
 
-                        % heuristically update settings
-                        if v_init <= 4
-                            width = [8;1];
-                            U_des = interval(-width,width);
-                            Opts_.Q = diag([1 25 1 10]);
-                            Opts_.extHorizon.active = 1;
-                            Opts_.extHorizon.horizon = 10;
-                            Opts_.extHorizon.decay = 'fall+End'; 
-                        else
-                            width = [8;0.4];
-                            U_des = interval(-width,width);
-                            Opts_.Q = diag([1 5 1 10]);
-                            Opts_.extHorizon.active = 0;
-                        end
-
                         % update parameters
                         Param_.tFinal = tFinal_;
                         Param_.U = U_max & (u + U_des);
@@ -144,6 +132,9 @@ parfor i = 1:length(v)
                         Param_.xf = x(end,:)';
                         Opts_.refTraj.x = x';
                         Opts_.refTraj.u = u*ones(1,size(x,1)-1);
+
+                        % optimize weighting matrix
+                        Opts_ = optimizeWeightingMatrix(Param_,Opts_);
 
                         % synthesise controller for the motion primitive
                         [obj,res] = generatorSpaceControl('vehicle',Param_,Opts_,Post);
@@ -157,6 +148,10 @@ parfor i = 1:length(v)
                         if contains(set,obj.Rfin)
                             disp([name,':     success (acc=',num2str(acc),',steer=',num2str(steer),')']);
                             parsave(fileSuccess,obj);
+                            if abs(steer) > 0
+                                objMirror = mirror(obj,[2,4],2,2);
+                                parsave(fileMirror,objMirror);
+                            end
                         else
                             disp([name,':     failed (acc=',num2str(acc),',steer=',num2str(steer),')']);
                             parsave(fileFail,obj);
@@ -168,7 +163,7 @@ parfor i = 1:length(v)
     end
 end
 
-% load filed and create maneuver automaton
+% load files and create maneuver automaton
 files = dir(pathSuccess);
 primitives = {};
 
@@ -195,4 +190,29 @@ end
 
 function parsave(fname, obj)
   save(fname, 'obj');
+end
+
+function Opts = optimizeWeightingMatrix(Param,Opts)
+
+    for i = 1:10
+
+        % controller synthesis
+        [obj,~] = generatorSpaceControl('vehicle',Param,Opts);
+        
+        % check if final set is contained in shifted initial set
+        xf = center(obj.Rfin);
+        set = zonotope(Param.R0 + (-center(Param.R0)));
+        phi = xf(4);
+        set = blkdiag([cos(phi) -sin(phi); sin(phi) cos(phi)],eye(2)) * set + xf;
+    
+        if contains(set,obj.Rfin)
+            break;
+        end
+        
+        % update weighting matrix
+        scale = rad(interval(obj.Rfin))./rad(interval(Param.R0));
+        scale = scale./scale(1);
+        Opts.Q = diag(scale);
+
+    end
 end

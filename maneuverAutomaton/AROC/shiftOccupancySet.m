@@ -1,4 +1,4 @@
-function R = shiftOccupancySet_car(R,xf,time)
+function R = shiftOccupancySet(R,xf,time)
 % shift occupancy set to final state of previous maneuver
 
     % compute tranformation matrix and offset

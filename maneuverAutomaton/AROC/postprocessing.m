@@ -1,4 +1,4 @@
-function R = postprocessing(R,l,w,wb,dt)
+function O = postprocessing(R,l,w,wb,dt)
 % function to compute the space occupied by the car from the reachable set
 
     R_ = R;
@@ -52,7 +52,10 @@ function R = postprocessing(R,l,w,wb,dt)
     
     % unite occopancy sets to speed-up collision checking
     N = round(supremum(R{end}.time)/dt);
-    t = linspace(infimum(R{1}.time),supremum(R{end}.time),N+1);
+    t = linspace(infimum(R{1}.time),N*dt,N+1);
+    if supremum(R{end}.time) > t(end) + 1e-10
+        t = [t, t(end) + dt];
+    end
     O = cell(N,1);
     counter = 2;
     
