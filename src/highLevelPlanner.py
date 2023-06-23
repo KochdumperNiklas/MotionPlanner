@@ -103,7 +103,7 @@ def initialization(scenario, planning_problem, param):
         x0[0] = x0[0] + np.cos(phi) * param['wheelbase']/2
         x0[1] = x0[1] + np.sin(phi) * param['wheelbase']/2
     else:
-        Exception('Wrong value for input argument "reference point"!. The valid values are "center" and "rear_axis".')
+        raise Exception('Wrong value for input argument "reference point"!. The valid values are "center" and "rear_axis".')
 
     pgon = interval2polygon([x0[0] - 0.01, x0[1] - 0.01], [x0[0] + 0.01, x0[1] + 0.01])
     x0_id = []
@@ -421,7 +421,7 @@ def velocity_profile(dist, speed_limit, param):
         if vel_des == np.inf:
             vel_des = param['v_init']
     else:
-        Exception('Wrong value for input argument "desired velocity"!. The valid values are "init" and "speed_limit".')
+        raise Exception('Wrong value for input argument "desired velocity"!. The valid values are "init" and "speed_limit".')
 
     # loop over all possible combinations of initial sets and goal sets
     val = np.inf
