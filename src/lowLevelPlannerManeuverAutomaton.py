@@ -114,7 +114,7 @@ def collision_check(node, primitive, space, param, timepoint):
             time = int(o['starttime']/param['time_step'])
         if ind + time <= param['steps']:
             pgon = affine_transform(o['space'], [np.cos(x[3]), -np.sin(x[3]), np.sin(x[3]), np.cos(x[3]), x[0], x[1]])
-            if ind + time < len(space) and not containment_check_robust(space[ind + time], pgon):
+            if ind + time < len(space) and not space[ind + time].contains(pgon):
                 """plt.plot(*space[ind + time].exterior.xy)
                 plt.plot(*pgon.exterior.xy)
                 plt.show()"""
@@ -137,11 +137,6 @@ def goal_check(node, primitive, param):
                     return True, i
 
     return False, None
-
-def containment_check_robust(pgon1, pgon2):
-    """check if polygon 1 contains polygon 2"""
-
-    return pgon1.contains(pgon2) or not pgon1.exterior.intersects(pgon2)
 
 def extract_control_inputs(node, primitives):
     """construct the sequence of control inputs for the given node"""
