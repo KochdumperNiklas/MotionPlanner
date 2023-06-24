@@ -89,7 +89,6 @@ def initialization(scenario, planning_problem, param):
 
     planning_problem = list(planning_problem.planning_problem_dict.values())[0]
     param['v_init'] = planning_problem.initial_state.velocity
-    param['steps'] = planning_problem.goal.state_list[0].time_step.end
 
     # maximum length of the car independent of the orientation
     param['length_max'] = np.sqrt(param['length']**2 + param['width']**2)
@@ -136,8 +135,8 @@ def initialization(scenario, planning_problem, param):
 
         for j in range(shapes):
 
-            param_['time_start'] = goal_state.time_step.start
-            param_['time_end'] = goal_state.time_step.end
+            param_['time_start'] = goal_state.time_step.start - planning_problem.initial_state.time_step
+            param_['time_end'] = goal_state.time_step.end - planning_problem.initial_state.time_step
 
             if hasattr(goal_state, 'position'):
 
@@ -177,6 +176,12 @@ def initialization(scenario, planning_problem, param):
 
                 param_['set'] = construct_goal_set(goal_state, goal_space_start, goal_space_end, param)
                 param['goal'].append(deepcopy(param_))
+
+    # determine number of time steps
+    param['steps'] = 0
+
+    for g in param['goal']:
+        param['steps'] = np.maximum(param['steps'], g['time_end'])
 
     # determine distance from initial point for each lanelet
     dist_init = distance2init(lanelets, param)
