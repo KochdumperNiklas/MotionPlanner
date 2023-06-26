@@ -223,21 +223,13 @@ def construct_goal_set(goal_state, goal_space_start, goal_space_end, param):
 def speed_limit_dynamics(lanelet, param):
     """compute maximum speed for a lanelet based on kinematic constraints (Kamm's circle)"""
 
-    # compute orientation
+    # compute orientation in the middle of each time step
     traj = lanelet.center_vertices.T
-    orientation = np.zeros((traj.shape[1], ))
+    orientation = np.zeros((traj.shape[1],))
 
-    for i in range(len(orientation)):
-        if i == 0:
-            diff = traj[:, i + 1] - traj[:, i]
-            orientation[i] = np.arctan2(diff[1], diff[0])
-        elif i == len(orientation) - 1:
-            diff = traj[:, i] - traj[:, i - 1]
-            orientation[i] = np.arctan2(diff[1], diff[0])
-        else:
-            diff1 = traj[:, i + 1] - traj[:, i]
-            diff2 = traj[:, i] - traj[:, i - 1]
-            orientation[i] = 0.5 * (np.arctan2(diff1[1], diff1[0]) + np.arctan2(diff2[1], diff2[0]))
+    for i in range(1, traj.shape[1]):
+        diff = traj[:, i] - traj[:, i - 1]
+        orientation[i] = np.arctan2(diff[1], diff[0])
 
     # avoid jumps by 2*pi
     for i in range(len(orientation) - 1):
@@ -247,10 +239,21 @@ def speed_limit_dynamics(lanelet, param):
         elif orientation[i] - orientation[i + 1] > 3:
             orientation[i + 1] = orientation[i + 1] + n * 2 * np.pi
 
+    # interpolate to obtain orientation at the time points
+    orientation[0] = orientation[1]
+    for i in range(1, len(orientation) - 1):
+        orientation[i] = 0.5 * (orientation[i] + orientation[i + 1])
+
     # compute maximum velocity to not violate Kamm's circle constraint at 0 acceleration
     dx = np.diff(lanelet.distance)
     dphi = np.diff(orientation)
-    v = np.sqrt(np.abs(param['a_max'] * dx/dphi))
+
+    ind = [i for i in range(len(dphi)) if abs(dphi[i]) > 1e-5]
+
+    if len(ind) > 0:
+        v = np.sqrt(np.abs(param['a_max'] * dx[ind]/dphi[ind]))
+    else:
+        v = 100
 
     return np.mean(v)
 
@@ -858,8 +861,9 @@ def obstacle_velocity(obs, param):
         dt = (occ2.time_step-occ1.time_step)*param['time_step']
         v[occ1.time_step] = dx/dt
 
-    v[0] = v[1]
-    v[-1] = v[-2]
+    if len(v) > 1:
+        v[0] = v[1]
+        v[-1] = v[-2]
 
     return v
 
@@ -2093,6 +2097,10 @@ def time_steps_lane_change(space, plan, lanelets, free_space):
 
 def remove_multi_polyogns(space, ref_traj):
     """select the best connected space for the case that space consists of multiple disconnected polygons"""
+
+    # catch case where space has not been computed
+    if space is None:
+        return space
 
     # loop over all time steps
     for i in range(len(space)):
