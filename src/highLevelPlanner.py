@@ -17,7 +17,7 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000, weight_velocity=1,
                      weight_safe_distance=10, minimum_safe_distance=1, minimum_steps_lane_change=5,
                      desired_steps_lane_change=20, desired_acceleration=1, desired_velocity='speed_limit',
-                     reference_point='center', compute_free_space=True, goal_set_priority=False):
+                     compute_free_space=True, goal_set_priority=False):
     """decide on which lanelets to be at all points in time"""
 
     # store algorithm settings
@@ -29,7 +29,6 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     param['desired_steps_lane_change'] = desired_steps_lane_change
     param['desired_acceleration'] = desired_acceleration
     param['desired_velocity'] = desired_velocity
-    param['reference_point'] = reference_point
     param['compute_free_space'] = compute_free_space
     param['goal_set_priority'] = goal_set_priority
 
@@ -94,15 +93,7 @@ def initialization(scenario, planning_problem, param):
     param['length_max'] = np.sqrt(param['length']**2 + param['width']**2)
 
     # determine lanelet and corresponding space for the initial state
-    if param['reference_point'] == 'center':
-        x0 = planning_problem.initial_state.position
-    elif param['reference_point'] == 'rear_axis':
-        x0 = planning_problem.initial_state.position
-        phi = planning_problem.initial_state.orientation
-        x0[0] = x0[0] + np.cos(phi) * param['wheelbase']/2
-        x0[1] = x0[1] + np.sin(phi) * param['wheelbase']/2
-    else:
-        raise Exception('Wrong value for input argument "reference point"!. The valid values are "center" and "rear_axis".')
+    x0 = planning_problem.initial_state.position
 
     pgon = interval2polygon([x0[0] - 0.01, x0[1] - 0.01], [x0[0] + 0.01, x0[1] + 0.01])
     x0_id = []
@@ -2233,12 +2224,6 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
     orientation = orientation_reference_trajectory(ref_traj, param)
 
     ref_traj = np.concatenate((ref_traj, np.expand_dims(velocity, axis=0), np.expand_dims(orientation, axis=0)), axis=0)
-
-    # transform reference trajectory back to reference point on the car
-    if param['reference_point'] == 'rear_axis':
-        for i in range(ref_traj.shape[1]):
-            ref_traj[0, i] = ref_traj[0, i] - np.cos(ref_traj[3, i]) * param['wheelbase']/2
-            ref_traj[1, i] = ref_traj[1, i] - np.sin(ref_traj[3, i]) * param['wheelbase']/2
 
     return ref_traj, plan
 

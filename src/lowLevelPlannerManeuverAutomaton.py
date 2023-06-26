@@ -34,6 +34,9 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
     # construct initial state
     x = np.expand_dims(np.array([param['x0'][0], param['x0'][1], param['v_init'], param['orientation']]), 1)
 
+    x[0, 0] = x[0, 0] - np.cos(x[3, 0]) * param['b']
+    x[1, 0] = x[1, 0] - np.sin(x[3, 0]) * param['b']
+
     # initialize queue for the search problem
     ind = MA.velocity2primitives(param['v_init'])
     node = Node([], x, 0)
@@ -77,10 +80,10 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
             if res:
                 if timepoint:
                     u = extract_control_inputs(node, MA.primitives)
-                    return node.x[:, :ind], u[:, :ind]
+                    return transform_trajectory(node.x[:, :ind], param), u[:, :ind]
                 else:
                     x, u = simulate_controller(MA, planning_problem, node, param)
-                    return x, u
+                    return transform_trajectory(x, param), u
 
             # precompute transformation matrix for speed-up
             phi = node.x[3, -1]
@@ -186,6 +189,15 @@ def extract_control_inputs(node, primitives):
             u = np.concatenate((u, u_new), axis=1)
 
     return u
+
+def transform_trajectory(x, param):
+    """transform trajectory from rear-axis to vehicle center"""
+
+    for i in range(x.shape[1]):
+        x[0, i] = x[0, i] + np.cos(x[3, i]) * param['b']
+        x[1, i] = x[1, i] + np.sin(x[3, i]) * param['b']
+
+    return x
 
 def plot_trajectory(node, scenario, plan, ref_traj, param):
     """plot the trajectory for the given node"""

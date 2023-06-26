@@ -3,6 +3,8 @@ import pickle
 from scipy.integrate import solve_ivp
 import os
 import sys
+from shapely.geometry.polygon import Polygon
+from shapely.affinity import affine_transform
 sys.path.append('./')
 
 from vehicle.vehicleParameter import vehicleParameter
@@ -26,8 +28,6 @@ dt = 0.1
 
 # load parameter for the car
 param = vehicleParameter()
-wb = param['wheelbase']
-s_max = param['s_max']
 
 # loop over all initial velocities
 primitives = []
@@ -59,21 +59,34 @@ while v_init < v_end:
                     if o == 0:
                         steer = 0
                     else:
-                        steer = np.arctan(wb * o / (v_init * tFinal_ + 0.5*acc * tFinal_**2))
+                        steer = np.arctan(param['wheelbase'] * o / (v_init * tFinal_ + 0.5*acc * tFinal_**2))
 
-                    if abs(steer) < s_max:
+                    if abs(steer) < param['s_max']:
 
                         # simulate the system
-                        ode = lambda t, x, u1, u2: [x[2] * np.cos(x[3]) - wb/2 * np.sin(x[3]) * x[2] * np.tan(u2) / wb,
-                                                    x[2] * np.sin(x[3]) + wb/2 * np.cos(x[3]) * x[2] * np.tan(u2) / wb,
+                        ode = lambda t, x, u1, u2: [x[2] * np.cos(x[3]),
+                                                    x[2] * np.sin(x[3]),
                                                     u1,
-                                                    x[2] * np.tan(u2) / wb]
+                                                    x[2] * np.tan(u2) / param['wheelbase']]
                         sol = solve_ivp(ode, [0, tFinal_], [0, 0, v_init, 0], args=(acc, steer), dense_output=True)
                         t = np.linspace(0, tFinal_, int(np.round(tFinal_/dt))+1)
                         x = sol.sol(t)
 
+                        # construct occupancy set
+                        occ = []
+                        car = Polygon([(-(param['length']/2 - param['b']), -param['width']/2),
+                                       (-(param['length']/2 - param['b']), param['width']/2),
+                                       (param['length']/2 + param['b'], param['width']/2),
+                                       (param['length']/2 + param['b'], -param['width']/2)])
+
+                        for i in range(x.shape[1]):
+                            phi = x[3, i]
+                            tmp = affine_transform(car, [np.cos(phi), -np.sin(phi), np.sin(phi), np.cos(phi), x[0, i],
+                                                         x[1, i]])
+                            occ.append({'space': tmp, 'time': dt * i})
+
                         # construct the motion primitive
-                        primitives.append(MotionPrimitive(x, np.array([acc, steer]), tFinal_))
+                        primitives.append(MotionPrimitive(x, np.array([acc, steer]), tFinal_, occupancy=occ))
 
     v_init = v_init + v_diff
 
