@@ -22,7 +22,11 @@ def loadAROCautomaton():
     # iterate over all the child elements of the root (= single motion primitives)
     for child in root:
 
-        for subchild in child:
+        # open .xml file storing the motion primitive
+        tree_prim = ET.parse(os.path.join(path, 'AROC', 'automaton', 'primitives', child.text))
+        primitive = tree_prim.getroot()
+
+        for subchild in primitive:
 
             # get successor motion primitives
             if subchild.tag == 'successors':
