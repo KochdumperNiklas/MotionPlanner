@@ -76,7 +76,7 @@ class GeneratorSpaceController:
         # compute zonotope factors
         beta = np.linalg.solve(P.Z[:, 1:], x_local - P.Z[:, [0]])
 
-        if np.any(abs(beta) > 1):
+        if np.any(abs(beta) > 1 + 1e-5):
             raise Exception('State is located outside of the corresponding parallelotope!')
 
         # compute control inputs for all time steps

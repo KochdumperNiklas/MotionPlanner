@@ -82,7 +82,7 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
                     u = extract_control_inputs(node, MA.primitives)
                     return transform_trajectory(node.x[:, :ind], param), u[:, :ind]
                 else:
-                    x, u = simulate_controller(MA, planning_problem, node, param)
+                    x, u = simulate_controller(MA, planning_problem, node, x, param)
                     return transform_trajectory(x, param), u
 
             # precompute transformation matrix for speed-up
@@ -147,14 +147,10 @@ def goal_check(node, primitive, param):
 
     return False, None
 
-def simulate_controller(MA, planning_problem, node, param):
-
-    # construct initial state
-    tmp = list(planning_problem.planning_problem_dict.values())[0].initial_state
-    x0 = np.array([tmp.position[0], tmp.position[1], tmp.velocity, tmp.orientation])
+def simulate_controller(MA, planning_problem, node, x0, param):
 
     # load controller object
-    controller = loadAROCcontroller(MA, node.primitives, x0)
+    controller = loadAROCcontroller(MA, node.primitives, x0[:, 0])
 
     # system dynamics
     ode = lambda t, x, u: [x[2] * np.cos(x[3]),
@@ -166,7 +162,7 @@ def simulate_controller(MA, planning_problem, node, param):
     x = np.zeros(node.x.shape)
     u = np.zeros((2, node.x.shape[1]-1))
 
-    x[:, 0] = x0
+    x[:, 0] = x0[:, 0]
 
     for i in range(node.x.shape[1]-1):
         u[:, i] = controller.get_control_input(i*param['time_step'], x[:, [i]])
