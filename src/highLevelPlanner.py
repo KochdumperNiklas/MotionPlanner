@@ -604,8 +604,9 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                                                [o.time_step], (y_min, y_max))
 
                         # compute occupied space if the safe distance is respected
-                        if not (width_max - y_max > y_min - width_min and width_max - y_max > param['width'] + 0.3) and \
-                                not (width_max - y_max <= y_min - width_min and y_min - width_min > param['width'] + 0.3):
+                        occupied, _ = occupied_side(width_max, width_min, y_max, y_min, param)
+
+                        if occupied == 'all':
 
                             offset_safe = 0.5 * param['length_max'] + np.maximum(v[o.time_step], 2)
                             space = (dist_min - offset_safe, dist_max + offset_safe)
@@ -644,6 +645,14 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
 
             if len(o) > 0:
 
+                # assign partially occupied space
+                for o_ in o:
+                    occupied, w = occupied_side(width_max, width_min, o_['width'][1], o_['width'][0], param)
+                    if not occupied == 'all':
+                        pgon = interval2polygon([o_['space'][0], v_min - 1], [o_['space'][1], v_max + 1])
+                        partially_occupied[id][j].append({'space': pgon, 'side': occupied, 'width': w})
+
+                # unite all intersecting obstacles
                 list_new = []
 
                 o.sort(key=lambda i: i['space'][0])
@@ -669,25 +678,13 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                             y_min = min(width[i][0], y_min)
 
                     # check if occupied space is small enough to still drive on the lane
-                    occupied = 'all'
-
-                    if width_max - y_max > y_min - width_min:
-                        if width_max - y_max > param['width'] + 0.3:
-                            occupied = 'right'
-                            w = (width_min, y_max + 0.2)
-                    else:
-                        if y_min - width_min > param['width'] + 0.3:
-                            occupied = 'left'
-                            w = (y_min - 0.2, width_max)
+                    occupied, _ = occupied_side(width_max, width_min, y_max, y_min, param)
 
                     # add obstacle to the list
                     space = (lower[cnt], up)
 
                     if occupied == 'all':
                         list_new.append(space)
-                    else:
-                        pgon = interval2polygon([space[0], v_min-1], [space[1], v_max+1])
-                        partially_occupied[id][j].append({'space': pgon, 'side': occupied, 'width': w})
 
                     cnt = ind + 1
 
@@ -778,6 +775,24 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
     safe_dist = area_safe_distance(free_space_all, occupied_dist)
 
     return free_space_all, partially_occupied, safe_dist
+
+def occupied_side(width_max, width_min, y_max, y_min, param):
+    """check which side of the lanelet is occupied"""
+
+    occupied = 'all'
+    w = None
+
+    if width_max - y_max > y_min - width_min:
+        if width_max - y_max > param['width'] + 0.3:
+            occupied = 'right'
+            w = (width_min, y_max + 0.2)
+    else:
+        if y_min - width_min > param['width'] + 0.3:
+            occupied = 'left'
+            w = (y_min - 0.2, width_max)
+
+    return occupied, w
+
 
 def occupied_predecessor(lanelets, id, dist_min, occupied_space, steps, width):
     """compute occupied space on all predecessor lanelets"""
