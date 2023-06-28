@@ -545,18 +545,13 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
 
                 # check if occupied space extends to predecessor lanelet
                 if dist_min - offset < 0:
-                    for ind in l.predecessor:
-                        for i in range(param['steps'] + 1):
-                            d = lanelets[ind].distance[-1]
-                            space = (d + dist_min - offset, d)
-                            occupied_space[ind][i].append({'space': space, 'width': (y_min, y_max)})
+                    occupied_predecessor(lanelets, id, dist_min - offset, occupied_space,
+                                         range(param['steps'] + 1), (y_min, y_max))
 
                 # check if occupied space extends to successor lanelet
                 if dist_max + offset > l.distance[-1]:
-                    for ind in l.successor:
-                        for i in range(param['steps'] + 1):
-                            d = dist_max + offset - l.distance[-1]
-                            occupied_space[ind][i].append({space: (0, d), 'width': (y_min, y_max)})
+                    occupied_successor(lanelets, id, dist_max + offset - l.distance[-1], occupied_space,
+                                       range(param['steps'] + 1), (y_min, y_max))
 
         else:
 
@@ -600,16 +595,13 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
 
                         # check if occupied space extends to predecessor lanelet
                         if dist_min - offset < 0:
-                            for ind in l.predecessor:
-                                d = lanelets[ind].distance[-1]
-                                space = (d + dist_min - offset, d)
-                                occupied_space[ind][o.time_step].append({'space': space, 'width': (y_min, y_max)})
+                            occupied_predecessor(lanelets, id, dist_min - offset, occupied_space,
+                                                 [o.time_step], (y_min, y_max))
 
                         # check if occupied space extends to successor lanelet
                         if dist_max + offset > l.distance[-1]:
-                            for ind in l.successor:
-                                d = dist_max + offset - l.distance[-1]
-                                occupied_space[ind][o.time_step].append({'space': (0, d), 'width': (y_min, y_max)})
+                            occupied_successor(lanelets, id, dist_max + offset - l.distance[-1], occupied_space,
+                                               [o.time_step], (y_min, y_max))
 
                         # compute occupied space if the safe distance is respected
                         if not (width_max - y_max > y_min - width_min and width_max - y_max > param['width'] + 0.3) and \
@@ -787,6 +779,30 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
 
     return free_space_all, partially_occupied, safe_dist
 
+def occupied_predecessor(lanelets, id, dist_min, occupied_space, steps, width):
+    """compute occupied space on all predecessor lanelets"""
+
+    for ind in lanelets[id].predecessor:
+
+        d = lanelets[ind].distance[-1]
+        space = (d + dist_min, d)
+
+        for i in steps:
+            occupied_space[ind][i].append({'space': space, 'width': width})
+
+        if d + dist_min < 0:
+            occupied_predecessor(lanelets, ind, d + dist_min, occupied_space, steps, width)
+
+def occupied_successor(lanelets, id, dist_max, occupied_space, steps, width):
+    """compute occupied space on all successor lanelets"""
+
+    for ind in lanelets[id].successor:
+
+        for i in steps:
+            occupied_space[ind][i].append({'space': (0, dist_max), 'width': width})
+
+        if dist_max > lanelets[ind].distance[-1]:
+            occupied_successor(lanelets, ind, dist_max - lanelets[ind].distance[-1], occupied_space, steps, width)
 
 def projection_lanelet_centerline(lanelet, pgon):
     """project a polygon to the center line of the lanelet to determine the occupied space"""
