@@ -273,7 +273,7 @@ def intersects_lanelet(lanelet, pgon):
             lane = lanelet.polygon.shapely_object.buffer(0)
             set = lane.intersection(pgon)
 
-        if isinstance(set, Polygon):
+        if isinstance(set, Polygon) or isinstance(set.convex_hull, Polygon):
             res = True
 
     return res
