@@ -1819,7 +1819,7 @@ def free_space_global(space, plan, time, lanelets, free_space, partially_occupie
 
         # remove partially occupied space from the free space
         for p in partial:
-            if p.intersects(space_glob[i]):
+            if intersects_polygon(p, space_glob[i]):
                 space_glob[i] = space_glob[i].difference(p)
 
         # increase counter
