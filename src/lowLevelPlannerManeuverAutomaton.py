@@ -80,9 +80,9 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
             if res:
                 if timepoint:
                     u = extract_control_inputs(node, MA.primitives)
-                    return transform_trajectory(node.x[:, :ind], param), u[:, :ind]
+                    return transform_trajectory(node.x[:, :ind+1], param), u[:, :ind]
                 else:
-                    x, u = simulate_controller(MA, planning_problem, node, x, param)
+                    x, u = simulate_controller(MA, planning_problem, node, x, ind+1, param)
                     return transform_trajectory(x, param), u
 
             # precompute transformation matrix for speed-up
@@ -147,7 +147,7 @@ def goal_check(node, primitive, param):
 
     return False, None
 
-def simulate_controller(MA, planning_problem, node, x0, param):
+def simulate_controller(MA, planning_problem, node, x0, ind, param):
 
     # load controller object
     controller = loadAROCcontroller(MA, node.primitives, x0[:, 0])
@@ -159,12 +159,12 @@ def simulate_controller(MA, planning_problem, node, x0, param):
                            x[2] * np.tan(u[1]) / param['wheelbase']]
 
     # simulate the controlled system
-    x = np.zeros(node.x.shape)
-    u = np.zeros((2, node.x.shape[1]-1))
+    x = np.zeros((x0.shape[0], ind))
+    u = np.zeros((2, ind-1))
 
     x[:, 0] = x0[:, 0]
 
-    for i in range(node.x.shape[1]-1):
+    for i in range(ind-1):
         u[:, i] = controller.get_control_input(i*param['time_step'], x[:, [i]])
         sol = solve_ivp(ode, [0, param['time_step']], x[:, i], args=(u[:, i], ), dense_output=True)
         x[:, i+1] = sol.sol(param['time_step'])
@@ -225,7 +225,7 @@ def plot_trajectory(node, scenario, plan, ref_traj, param):
         plt.plot(*tmp.exterior.xy, 'r')
 
     plt.axis('equal')
-    plt.show()
+    #plt.show()
 
 def expand_node(node, primitive, ind, ref_traj, fixed, T):
     """add a new primitive to a node"""
