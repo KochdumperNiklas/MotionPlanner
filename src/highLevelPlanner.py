@@ -541,17 +541,17 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                 # loop over all time steps
                 for i in range(param['steps'] + 1):
                     space = (max(d_min, dist_min - offset), min(d_max, dist_max + offset))
-                    occupied_space[id][i].append({'space': space, 'width': (y_min, y_max)})
+                    occupied_space[id][i].append({'space': space, 'width': (y_min, y_max), 'obs': pgon})
 
                 # check if occupied space extends to predecessor lanelet
                 if dist_min - offset < 0:
                     occupied_predecessor(lanelets, id, dist_min - offset, occupied_space,
-                                         range(param['steps'] + 1), (y_min, y_max))
+                                         range(param['steps'] + 1), (y_min, y_max), pgon)
 
                 # check if occupied space extends to successor lanelet
                 if dist_max + offset > l.distance[-1]:
                     occupied_successor(lanelets, id, dist_max + offset - l.distance[-1], occupied_space,
-                                       range(param['steps'] + 1), (y_min, y_max))
+                                       range(param['steps'] + 1), (y_min, y_max), pgon)
 
         else:
 
@@ -591,17 +591,17 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                         dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon)
                         offset = 0.5 * param['length_max'] + param['minimum_safe_distance']
                         space = (max(d_min, dist_min - offset), min(d_max, dist_max + offset))
-                        occupied_space[id][o.time_step].append({'space': space, 'width': (y_min, y_max)})
+                        occupied_space[id][o.time_step].append({'space': space, 'width': (y_min, y_max), 'obs': pgon})
 
                         # check if occupied space extends to predecessor lanelet
                         if dist_min - offset < 0:
                             occupied_predecessor(lanelets, id, dist_min - offset, occupied_space,
-                                                 [o.time_step], (y_min, y_max))
+                                                 [o.time_step], (y_min, y_max), pgon)
 
                         # check if occupied space extends to successor lanelet
                         if dist_max + offset > l.distance[-1]:
                             occupied_successor(lanelets, id, dist_max + offset - l.distance[-1], occupied_space,
-                                               [o.time_step], (y_min, y_max))
+                                               [o.time_step], (y_min, y_max), pgon)
 
                         # compute occupied space if the safe distance is respected
                         occupied, _ = occupied_side(width_max, width_min, y_max, y_min, param)
@@ -650,7 +650,7 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                     occupied, w = occupied_side(width_max, width_min, o_['width'][1], o_['width'][0], param)
                     if not occupied == 'all':
                         pgon = interval2polygon([o_['space'][0], v_min - 1], [o_['space'][1], v_max + 1])
-                        partially_occupied[id][j].append({'space': pgon, 'side': occupied, 'width': w})
+                        partially_occupied[id][j].append({'space': pgon, 'side': occupied, 'width': w, 'obs': o_['obs']})
 
                 # unite all intersecting obstacles
                 list_new = []
@@ -794,7 +794,7 @@ def occupied_side(width_max, width_min, y_max, y_min, param):
     return occupied, w
 
 
-def occupied_predecessor(lanelets, id, dist_min, occupied_space, steps, width):
+def occupied_predecessor(lanelets, id, dist_min, occupied_space, steps, width, pgon):
     """compute occupied space on all predecessor lanelets"""
 
     for ind in lanelets[id].predecessor:
@@ -803,21 +803,21 @@ def occupied_predecessor(lanelets, id, dist_min, occupied_space, steps, width):
         space = (d + dist_min, d)
 
         for i in steps:
-            occupied_space[ind][i].append({'space': space, 'width': width})
+            occupied_space[ind][i].append({'space': space, 'width': width, 'obs': pgon})
 
         if d + dist_min < 0:
-            occupied_predecessor(lanelets, ind, d + dist_min, occupied_space, steps, width)
+            occupied_predecessor(lanelets, ind, d + dist_min, occupied_space, steps, width, pgon)
 
-def occupied_successor(lanelets, id, dist_max, occupied_space, steps, width):
+def occupied_successor(lanelets, id, dist_max, occupied_space, steps, width, pgon):
     """compute occupied space on all successor lanelets"""
 
     for ind in lanelets[id].successor:
 
         for i in steps:
-            occupied_space[ind][i].append({'space': (0, dist_max), 'width': width})
+            occupied_space[ind][i].append({'space': (0, dist_max), 'width': width, 'obs': pgon})
 
         if dist_max > lanelets[ind].distance[-1]:
-            occupied_successor(lanelets, ind, dist_max - lanelets[ind].distance[-1], occupied_space, steps, width)
+            occupied_successor(lanelets, ind, dist_max - lanelets[ind].distance[-1], occupied_space, steps, width, pgon)
 
 def projection_lanelet_centerline(lanelet, pgon):
     """project a polygon to the center line of the lanelet to determine the occupied space"""
@@ -1695,7 +1695,7 @@ def free_space_global(space, plan, time, lanelets, free_space, partially_occupie
                 pgon = lanelet2global(l, lower, upper)
 
                 for p in partially_occupied[plan[i]][i]:
-                    partial = partial + partially_occupied_global(p, l, lower, upper, lanelets, free_space, i, param)
+                    partial = partial + [p['obs']]
                 break
 
         space_glob[i] = Polygon(pgon.T)
@@ -1723,8 +1723,7 @@ def free_space_global(space, plan, time, lanelets, free_space, partially_occupie
                 space_glob[i] = space_glob[i].union(pgon_right)
 
                 for p in partially_occupied[l.adj_right][i]:
-                    partial = partial + partially_occupied_global(p, lanelets[l.adj_right], lower_right, upper_right,
-                                                                  lanelets, free_space, i, param)
+                    partial = partial + [p['obs']]
 
         # get free space on the left lanelet
         pgon_left = None
@@ -1746,8 +1745,7 @@ def free_space_global(space, plan, time, lanelets, free_space, partially_occupie
                 space_glob[i] = space_glob[i].union(pgon_left)
 
                 for p in partially_occupied[l.adj_left][i]:
-                    partial = partial + partially_occupied_global(p, lanelets[l.adj_left], lower_left, upper_left,
-                                                                  lanelets, free_space, i, param)
+                    partial = partial + [p['obs']]
 
         # get free space on the successor lanelets
         pgon_suc = None
@@ -1767,8 +1765,7 @@ def free_space_global(space, plan, time, lanelets, free_space, partially_occupie
                     pgon_suc = pgon_suc.union(Polygon(pgon_tmp.T))
 
                 for p in partially_occupied[s][i]:
-                    partial = partial + partially_occupied_global(p, lanelets[s], lower_suc, upper_suc, lanelets,
-                                                                  free_space, i, param)
+                    partial = partial + [p['obs']]
 
             if pgon_suc is not None:
                 pgon_suc = unite_lanelets_successor(pgon, pgon_suc)
@@ -1791,8 +1788,7 @@ def free_space_global(space, plan, time, lanelets, free_space, partially_occupie
                     pgon_pre = pgon_pre.union(Polygon(pgon_tmp.T))
 
                 for pr in partially_occupied[p][i]:
-                    partial = partial + partially_occupied_global(pr, lanelets[p], lower_pre, upper_pre, lanelets,
-                                                                  free_space, i, param)
+                    partial = partial + [pr['obs']]
 
             if pgon_pre is not None:
                 pgon_pre = unite_lanelets_predecessor(pgon, pgon_pre)
@@ -1814,8 +1810,7 @@ def free_space_global(space, plan, time, lanelets, free_space, partially_occupie
                             space_glob[i] = space_glob[i].union(pgon)
 
                             for p in partially_occupied[id][i]:
-                                partial = partial + partially_occupied_global(p, lanelets[id], lower_x0, upper_x0,
-                                                                              lanelets, free_space, i, param)
+                                partial = partial + [p['obs']]
 
         # remove partially occupied space from the free space
         for p in partial:
@@ -2004,50 +1999,6 @@ def distance_line_point(line, point):
             return dist2, line[:, [1]]
         else:
             return dist_proj, p_proj
-
-def partially_occupied_global(space, lanelet, lower, upper, lanelets, free_space, step, param):
-    """convert the partially occupied space to the global coordinate system"""
-
-    res = []
-
-    # compute lower and upper bound for the partially occupied space
-    lower_par = space['space'].bounds[0]
-    if lower_par > 1e-5:
-        lower_par = lower_par + 0.5*param['length_max']
-
-    upper_par = space['space'].bounds[2]
-    if upper_par < lanelet.distance[-1] - 1e-5:
-        upper_par = upper_par - 0.5*param['length_max']
-
-    # compute width
-    width = space['width']
-
-    if space['side'] == 'right':
-        width = (width[0] - 0.1, width[1])
-    else:
-        width = (width[0], width[1] + 0.1)
-
-    # convert to global coordinate frame
-    if lower_par <= upper_par and intersects_interval((lower_par, upper_par), (lower, upper)):
-
-        tmp = lanelet2global(lanelet, lower_par, upper_par, width=width)
-        res.append(Polygon(tmp.T))
-
-    elif upper_par < 0:
-        for p in lanelet.predecessor:
-            if len(free_space[p][step]) == 0 or free_space[p][step][0].bounds[-1] < lanelets[p].distance[-1] - 1e-5:
-                tmp = lanelet2global(lanelets[p], lanelets[p].distance[-1] - 0.5 * param['length_max'] - 0.1,
-                                     lanelets[p].distance[-1] + upper_par, width=width)
-                res.append(Polygon(tmp.T))
-
-    elif lower_par > lanelet.distance[-1]:
-        for s in lanelet.successor:
-            if len(free_space[s][step]) == 0 or free_space[s][step][0].bounds[0] > 1e-5:
-                tmp = lanelet2global(lanelets[s], lower_par - lanelet.distance[-1],
-                                          0.5*param['length_max'] + 0.1, width=width)
-                res.append(Polygon(tmp.T))
-
-    return res
 
 def time_steps_lane_change(space, plan, lanelets, free_space):
     """compute the time steps in which a lane change is possible"""
