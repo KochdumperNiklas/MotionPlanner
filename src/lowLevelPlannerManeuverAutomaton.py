@@ -62,11 +62,6 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
         # check if motion primitive is collision free
         if collision_check(node, primitive, space_all, param, timepoint):
 
-            #print(node.primitives)
-
-            """if len(node.primitives) >= 4:
-                plot_trajectory(node, scenario, plan, ref_traj, param)"""
-
             # fix motion primitive if planning horizon is reached
             if len(node.primitives) == cnt + HORIZON:
                 for i in range(len(queue)):
@@ -124,9 +119,6 @@ def collision_check(node, primitive, space, param, timepoint):
         if ind + time <= param['steps']:
             pgon = affine_transform(o['space'], [np.cos(x[3]), -np.sin(x[3]), np.sin(x[3]), np.cos(x[3]), x[0], x[1]])
             if ind + time < len(space) and not space[ind + time].contains(pgon):
-                """plt.plot(*space[ind + time].exterior.xy)
-                plt.plot(*pgon.exterior.xy)
-                plt.show()"""
                 return False
 
     return True
@@ -194,38 +186,6 @@ def transform_trajectory(x, param):
         x[1, i] = x[1, i] + np.sin(x[3, i]) * param['b']
 
     return x
-
-def plot_trajectory(node, scenario, plan, ref_traj, param):
-    """plot the trajectory for the given node"""
-
-    # plot lanelets
-    lanelets = scenario.lanelet_network.lanelets
-
-    for l in lanelets:
-        if l.lanelet_id in plan:
-            plt.plot(*l.polygon.shapely_object.exterior.xy, 'b')
-
-    # plot goal set
-    for goal in param['goal']:
-        if goal['space'] is not None:
-            plt.plot(*goal['space'].exterior.xy, 'g')
-
-    # plot reference trajectory
-    plt.plot(ref_traj[0, :], ref_traj[1, :], 'k')
-
-    # shape of the car
-    L = param['length']
-    W = param['width']
-    car = Polygon([(-L / 2, -W / 2), (-L / 2, W / 2), (L / 2, W / 2), (L / 2, -W / 2)])
-
-    # plot car
-    for i in range(node.x.shape[1]):
-        phi = node.x[3, i]
-        tmp = affine_transform(car, [np.cos(phi), -np.sin(phi), np.sin(phi), np.cos(phi), node.x[0, i], node.x[1, i]])
-        plt.plot(*tmp.exterior.xy, 'r')
-
-    plt.axis('equal')
-    #plt.show()
 
 def expand_node(node, primitive, ind, ref_traj, fixed, T):
     """add a new primitive to a node"""
