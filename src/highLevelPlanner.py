@@ -2074,7 +2074,7 @@ def time_steps_lane_change(space, plan, lanelets, free_space):
                     break
 
         # sort time steps where lane change is possible
-        time[i] = np.asarray(time[i])
+        time[i] = np.unique(np.asarray(time[i]))
         time[i] = np.sort(time[i])
 
     return time
@@ -2203,7 +2203,7 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
 
             # compute start and end time step for the lane change
             ind_start = max(time_lane[i][0]+1, ind[i] - np.floor(param['desired_steps_lane_change']/2)).astype(int)
-            ind_end = min(time_lane[i][-1]-1, ind[i] + np.floor(param['desired_steps_lane_change']/2)).astype(int)
+            ind_end = min(time_lane[i][-1], ind[i] + np.floor(param['desired_steps_lane_change']/2)).astype(int)
 
             # interpolate between the center trajectories for the two lanes
             for j in range(ind_start, ind_end+1):
