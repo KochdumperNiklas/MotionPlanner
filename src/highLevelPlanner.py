@@ -1041,18 +1041,18 @@ def safe_distance_violation(space, safe_distance):
 def width_lanelet(lanelet):
     """compute the width of a lanelet"""
 
-    width_max = -np.inf
-    width_min = np.inf
+    width_max = np.inf
+    width_min = -np.inf
 
     # loop over all centerline segments
     for i in range(0, len(lanelet.distance) - 1):
 
         # compute lanelet width
         d = lanelet.right_vertices[[i], :] - lanelet.center_vertices[[i], :]
-        width_min = min(width_min, -np.linalg.norm(d))
+        width_min = max(width_min, -np.linalg.norm(d))
 
         d = lanelet.left_vertices[[i], :] - lanelet.center_vertices[[i], :]
-        width_max = max(width_max, np.linalg.norm(d))
+        width_max = min(width_max, np.linalg.norm(d))
 
     return width_min, width_max
 
