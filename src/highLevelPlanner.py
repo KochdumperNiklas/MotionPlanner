@@ -845,51 +845,24 @@ def projection_lanelet_centerline(lanelet, pgon):
     for i in range(0, len(lanelet.distance) - 1):
 
         # check if space intersects the current lanelet segment
-        seg = Polygon(np.concatenate((lanelet.center_vertices[[i], :], lanelet.right_vertices[[i], :],
-                                      lanelet.right_vertices[[i+1], :], lanelet.center_vertices[[i+1], :],
+        seg = Polygon(np.concatenate((lanelet.right_vertices[[i], :], lanelet.right_vertices[[i+1], :],
                                       lanelet.left_vertices[[i+1], :], lanelet.left_vertices[[i], :])))
 
         if seg.intersects(o_int):
 
             # compute normalized vector representing the direction of the current segment
             diff = lanelet.center_vertices[i + 1, :] - lanelet.center_vertices[i, :]
-            dist = np.linalg.norm(diff)
-            diff = np.expand_dims(diff / dist, axis=0)
+            diff = np.expand_dims(diff / np.linalg.norm(diff), axis=0)
 
-            # compute orthogonal vectors
-            diff1 = lanelet.left_vertices[i, :] - lanelet.right_vertices[i, :]
-            diff1 = np.expand_dims(diff1 / np.linalg.norm(diff1), axis=0)
-
-            diff2 = lanelet.left_vertices[i + 1, :] - lanelet.right_vertices[i + 1, :]
-            diff2 = np.expand_dims(diff2 / np.linalg.norm(diff2), axis=0)
-
-            # project the vertices of the polygon onto the centerline (orthogonal)
+            # project the vertices of the polygon onto the centerline
             V_ = diff @ (V - np.transpose(lanelet.center_vertices[[i], :]))
 
-            # project the vertices of the polygon onto the centerline (direction of the segment)
-            n = np.array([[-diff[0, 1], diff[0, 0]]])
-            offset = (n @ lanelet.center_vertices[[i], :].T)[0, 0]
-
-            tmp1 = (n @ diff1.T)[0, 0]
-            V1 = (np.eye(2) - (diff1.T @ n)/tmp1) @ V + offset/tmp1 * diff1.T @ np.ones((1, V.shape[1]))
-            V1_ = diff @ (V1 - np.transpose(lanelet.center_vertices[[i], :]))
-
-            tmp2 = (n @ diff2.T)[0, 0]
-            V2 = (np.eye(2) - (diff1.T @ n) / tmp2) @ V + offset / tmp2 * diff2.T @ np.ones((1, V.shape[1]))
-            V2_ = diff @ (V2 - np.transpose(lanelet.center_vertices[[i], :]))
-
-            V_ = np.concatenate((V_, V1_, V2_), axis=1)
-
             # update ranges for the projection
-            dist_max = max(dist_max, max(0, min(max(V_[0]), dist)) + lanelet.distance[i])
-            dist_min = min(dist_min, max(0, min(min(V_[0]), dist)) + lanelet.distance[i])
+            dist_max = max(dist_max, max(V_[0]) + lanelet.distance[i])
+            dist_min = min(dist_min, min(V_[0]) + lanelet.distance[i])
 
             # compute width of the lanelet that is occupied
-            V1 = diff1 @ (V - np.transpose(lanelet.center_vertices[[i], :]))
-            V2 = diff2 @ (V - np.transpose(lanelet.center_vertices[[i], :]))
-            V3 = np.array([[-diff[0, 1], diff[0, 0]]]) @ (V - np.transpose(lanelet.center_vertices[[i], :]))
-
-            V_ = np.concatenate((V1, V2, V3), axis=1)
+            V_ = np.array([[-diff[0, 1], diff[0, 0]]]) @ (V - np.transpose(lanelet.center_vertices[[i], :]))
 
             y_max = max(y_max, max(V_[0]))
             y_min = min(y_min, min(V_[0]))
