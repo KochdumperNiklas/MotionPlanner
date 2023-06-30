@@ -66,7 +66,7 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     vel = [(s.bounds[1], s.bounds[3]) for s in space]
 
     # compute a desired reference trajectory
-    ref_traj, plan = reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param, lanelets)
+    ref_traj, plan = reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param, lanelets, partially_occupied)
 
     # resolve issue with spaces consisting of multiple distinct polygons
     space_glob = remove_multi_polyogns(space_glob, ref_traj)
@@ -2125,7 +2125,7 @@ def increase_free_space(space, param):
 
     return space
 
-def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param, lanelets):
+def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param, lanelets, partially_occupied):
     """compute a desired reference trajectory"""
 
     # compute suitable velocity profile
@@ -2155,6 +2155,8 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
     step = 0
     tmp = [[] for i in range(len(x))]
     center_traj = [deepcopy(tmp) for i in range(len(lanes))]
+    orthogonal = [deepcopy(tmp) for i in range(len(lanes))]
+    shifts = []
 
     for j in range(len(lanes)):
 
@@ -2163,6 +2165,7 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
 
             d = x[i] - dist
             lanelet = lanelets[lanes[j]]
+            partial = partially_occupied[lanes[j]][i]
 
             if d >= lanelet.distance[-1]:
                 if j < len(lanes) - 1 and lanes[j + 1] in lanelet.successor:
@@ -2176,7 +2179,85 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
                     p2 = lanelet.center_vertices[k, :]
                     p = p1 + (p2 - p1) * (d - lanelet.distance[k-1])/(lanelet.distance[k] - lanelet.distance[k-1])
                     center_traj[j][i] = np.transpose(p)
+                    diff = p2 - p1
+                    orthogonal[j][i] = np.array([[-diff[1], diff[0]]])/np.linalg.norm(diff)
+                    for par in partial:
+                        if par['space'].bounds[0] <= d <= par['space'].bounds[2]:
+                            if par['side'] == 'left':
+                                w_lane = np.linalg.norm(lanelet.right_vertices[k, :] - lanelet.center_vertices[k, :])
+                                w = 0.5*(par['width'][0] - w_lane)
+                                if len(shifts) == 0 or not shifts[-1]['lane'] == j or not shifts[-1]['ind'][-1] in [i, i-1] or not shifts[-1]['side'] == 'left':
+                                    shifts.append({'lane': j, 'w': w, 'side': 'left', 'ind': [i]})
+                                else:
+                                    shifts[-1]['w'] = min(shifts[-1]['w'], w)
+                                    shifts[-1]['ind'].append(i)
+                            else:
+                                w_lane = np.linalg.norm(lanelet.left_vertices[k, :] - lanelet.center_vertices[k, :])
+                                w = 0.5 * (par['width'][1] + w_lane)
+                                if len(shifts) == 0 or not shifts[-1]['lane'] == j or not shifts[-1]['ind'][-1] in [i, i-1] or not shifts[-1]['side'] == 'right':
+                                    shifts.append({'lane': j, 'w': w, 'side': 'right', 'ind': [i]})
+                                else:
+                                    shifts[-1]['w'] = max(shifts[-1]['w'], w)
+                                    shifts[-1]['ind'].append(i)
                     break
+
+    # shift center trajectory for partially occupied space
+    interp = 10
+
+    for s in shifts:
+
+        # extend shifted area if it is close to ths start or end
+        s['ind'] = np.unique(s['ind'])
+        index = [i for i in range(len(plan)) if len(center_traj[s['lane']][i]) > 0]
+
+        if s['ind'][0] - interp < index[0] and (s['lane'] == 0 or lanes[s['lane']-1] not in lanelets[lanes[s['lane']]].predecessor):
+            s['ind'] = list(np.arange(index[0], s['ind'][-1] + 1))
+        if s['ind'][-1] + interp > index[-1] and (s['lane'] == len(lanes)-1 or lanes[s['lane']+1] not in lanelets[lanes[s['lane']]].successor):
+            s['ind'] = list(np.arange(s['ind'][0], index[-1] + 1))
+
+        # shift reference trajectory
+        for i in s['ind']:
+            d = orthogonal[s['lane']][i]
+            center_traj[s['lane']][i] = center_traj[s['lane']][i] + d * s['w']
+
+        # find minimum index for interpolation before the shifted area
+        min_index = index[0]
+        cnt = s['lane']
+        while cnt > 0 and lanes[cnt - 1] in lanelets[lanes[cnt]].predecessor:
+            cnt = cnt - 1
+            ind = [i for i in range(len(plan)) if len(center_traj[cnt][i]) > 0]
+            min_index = ind[0]
+        min_index = max(min_index, s['ind'][0] - interp)
+
+        # interpolation before the shifted area
+        cnt = s['lane']
+        for i in range(s['ind'][0]-1, min_index-1, -1):
+            if len(center_traj[cnt][i]) == 0:
+                cnt = cnt - 1
+            d = orthogonal[cnt][i]
+            p = center_traj[cnt][i] + d * s['w']
+            w = 1 / (1 + np.exp(-5 * (2 * ((i - min_index) / (s['ind'][0] - min_index)) - 1)))
+            center_traj[cnt][i] = w * p + (1-w) * center_traj[cnt][i]
+
+        # find maximum index for interpolation after the shifted area
+        max_index = index[-1]
+        cnt = s['lane']
+        while cnt + 1 < len(lanes) and lanes[cnt+1] in lanelets[lanes[cnt]].successor:
+            cnt = cnt + 1
+            ind = [i for i in range(len(plan)) if len(center_traj[cnt][i]) > 0]
+            max_index = ind[-1]
+        max_index = min(max_index, s['ind'][-1] + interp)
+
+        # interpolation after the shifted area
+        cnt = s['lane']
+        for i in range(s['ind'][-1] + 1, max_index+1):
+            if len(center_traj[cnt][i]) == 0:
+                cnt = cnt + 1
+            d = orthogonal[cnt][i]
+            p = center_traj[cnt][i] + d * s['w']
+            w = 1 / (1 + np.exp(-5 * (2 * ((i - s['ind'][-1] - 1) / (max_index - s['ind'][-1] - 1)) - 1)))
+            center_traj[cnt][i] = (1 - w) * p + w * center_traj[cnt][i]
+
 
     # correct the center trajectory to avoid collisions with lanelet boundaries for lanelets with high curvature
     """for j in range(len(center_traj)):
@@ -2195,6 +2276,8 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
             cnt = cnt + 1
 
     # loop over all lane changes
+    lane_changes = []
+
     for i in range(len(ind)):
 
         # check if it is a lane change or just a change onto a successor lanelet
@@ -2204,6 +2287,8 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
             # compute start and end time step for the lane change
             ind_start = max(time_lane[i][0]+1, ind[i] - np.floor(param['desired_steps_lane_change']/2)).astype(int)
             ind_end = min(time_lane[i][-1], ind[i] + np.floor(param['desired_steps_lane_change']/2)).astype(int)
+
+            lane_changes.append({'ind': np.arange(ind_start, ind_end+1), 'lanes': [plan[ind[i]], plan[ind[i]+1]]})
 
             # interpolate between the center trajectories for the two lanes
             for j in range(ind_start, ind_end+1):
@@ -2218,7 +2303,65 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
 
     ref_traj = np.concatenate((ref_traj, np.expand_dims(velocity, axis=0), np.expand_dims(orientation, axis=0)), axis=0)
 
+    # correct orientation of the reference trajectory to avoid collisions
+    ref_traj = correct_orientation(ref_traj, lanelets, plan, lane_changes, param)
+
     return ref_traj, plan
+
+def correct_orientation(ref_traj, lanelets, plan, lane_changes, param):
+    """correct the orientation of the reference trajectory to avoid collisions with the lanelet boundaries"""
+
+    # construct polygons for all lane changes
+    pgons = []
+
+    for l in lane_changes:
+        if lanelets[l['lanes'][0]].adj_right == l['lanes'][1]:
+            pgon = Polygon(np.concatenate((lanelets[l['lanes'][0]].left_vertices.T,
+                                           np.fliplr(lanelets[l['lanes'][1]].right_vertices.T)), axis=1).T)
+        else:
+            pgon = Polygon(np.concatenate((lanelets[l['lanes'][1]].left_vertices.T,
+                                           np.fliplr(lanelets[l['lanes'][0]].right_vertices.T)), axis=1).T)
+        pgons.append(pgon)
+
+    # polygon for the car
+    car = interval2polygon([-param['length']/2, -param['width']/2], [param['length']/2, param['width']/2])
+
+    # loop over all time steps
+    for i in range(ref_traj.shape[1]):
+
+        phi = ref_traj[3, i]
+        x = ref_traj[0, i]
+        y = ref_traj[1, i]
+        pgon = lanelets[plan[i]].polygon.shapely_object
+
+        for j in range(len(lane_changes)):
+            if i in lane_changes[j]['ind']:
+                pgon = pgons[j]
+                break
+
+        if not pgon.is_valid:
+            pgon = pgon.buffer(0)
+
+        dphi = 0.1
+        cnt = 0
+        phi_ = phi
+
+        while not pgon.contains(affine_transform(car, [np.cos(phi_), -np.sin(phi_), np.sin(phi_), np.cos(phi_), x, y])):
+
+            if abs(phi_ - phi) > np.pi:
+                dphi = 0.5*dphi
+                cnt = 1
+
+            phi_ = phi + cnt * dphi
+
+            if cnt > 0:
+                cnt = -cnt
+            else:
+                cnt = -cnt + 1
+
+        ref_traj[3, i] = phi_
+
+    return ref_traj
 
 def orientation_reference_trajectory(ref_traj, param):
     """compute orientation for the reference trajectory"""
