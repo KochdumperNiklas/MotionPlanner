@@ -133,7 +133,7 @@ def goal_check(node, primitive, param):
     for i in range(ind, node.x.shape[1]):
         for goal in param['goal']:
             if goal['time_start'] <= i <= goal['time_end']:
-                p = Point(node.x[0, i], node.x[1, i])
+                p = Point(node.x[0, i] + np.cos(x[3, i]) * param['b'], node.x[1, i] + + np.sin(x[3, i]) * param['b'])
                 if goal['space'] is None or goal['space'].contains(p):
                     return True, i
 
