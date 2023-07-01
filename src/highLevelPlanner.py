@@ -2156,6 +2156,7 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
     tmp = [[] for i in range(len(x))]
     center_traj = [deepcopy(tmp) for i in range(len(lanes))]
     orthogonal = [deepcopy(tmp) for i in range(len(lanes))]
+    center_orientation = [deepcopy(tmp) for i in range(len(lanes))]
     shifts = []
 
     for j in range(len(lanes)):
@@ -2181,6 +2182,7 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
                     center_traj[j][i] = np.transpose(p)
                     diff = p2 - p1
                     orthogonal[j][i] = np.array([[-diff[1], diff[0]]])/np.linalg.norm(diff)
+                    center_orientation[j][i] = np.arctan2(diff[1], diff[0])
                     for par in partial:
                         if par['space'].bounds[0] <= d <= par['space'].bounds[2]:
                             add_shift(shifts, par, lanelet, i, j, k)
@@ -2195,13 +2197,16 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
 
     # store reference trajectory (without considering lane changes)
     ref_traj = np.zeros((2, len(plan)))
+    orientation = np.zeros((len(plan), ))
     cnt = 0
 
     for i in range(0, len(plan)):
         if len(center_traj[cnt][i]) == 0:
             ref_traj[:, i] = center_traj[cnt+1][i]
+            orientation[i] = center_orientation[cnt+1][i]
         else:
             ref_traj[:, i] = center_traj[cnt][i]
+            orientation[i] = center_orientation[cnt][i]
         if i < len(plan)-1 and plan[i] != plan[i+1]:
             cnt = cnt + 1
 
@@ -2229,7 +2234,7 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
 
     # extend reference trajectory by velocity and orientation
     velocity = velocity_reference_trajectory(ref_traj, param)
-    orientation = orientation_reference_trajectory(ref_traj, param)
+    orientation = orientation_reference_trajectory(ref_traj, orientation, param)
 
     ref_traj = np.concatenate((ref_traj, np.expand_dims(velocity, axis=0), np.expand_dims(orientation, axis=0)), axis=0)
 
@@ -2485,7 +2490,7 @@ def add_predecessor(pgon, ind, lanelets, length, param):
 
     return pgon
 
-def orientation_reference_trajectory(ref_traj, param):
+def orientation_reference_trajectory(ref_traj, default, param):
     """compute orientation for the reference trajectory"""
 
     # compute orientation in the middle of each time step
@@ -2494,7 +2499,10 @@ def orientation_reference_trajectory(ref_traj, param):
 
     for i in range(1, ref_traj.shape[1]):
         diff = ref_traj[:, i] - ref_traj[:, i - 1]
-        orientation[i] = np.arctan2(diff[1], diff[0])
+        if all(diff == 0):
+            orientation[i] = default[i]
+        else:
+            orientation[i] = np.arctan2(diff[1], diff[0])
 
     # avoid jumps by 2*pi
     for i in range(len(orientation) - 1):
