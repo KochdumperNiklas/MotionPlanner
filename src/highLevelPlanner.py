@@ -2183,22 +2183,7 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
                     orthogonal[j][i] = np.array([[-diff[1], diff[0]]])/np.linalg.norm(diff)
                     for par in partial:
                         if par['space'].bounds[0] <= d <= par['space'].bounds[2]:
-                            if par['side'] == 'left':
-                                w_lane = np.linalg.norm(lanelet.right_vertices[k, :] - lanelet.center_vertices[k, :])
-                                w = 0.5*(par['width'][0] - w_lane)
-                                if len(shifts) == 0 or not shifts[-1]['lane'] == j or not shifts[-1]['ind'][-1] in [i, i-1] or not shifts[-1]['side'] == 'left':
-                                    shifts.append({'lane': j, 'w': w, 'side': 'left', 'ind': [i], 'end': True, 'start': True})
-                                else:
-                                    shifts[-1]['w'] = min(shifts[-1]['w'], w)
-                                    shifts[-1]['ind'].append(i)
-                            else:
-                                w_lane = np.linalg.norm(lanelet.left_vertices[k, :] - lanelet.center_vertices[k, :])
-                                w = 0.5 * (par['width'][1] + w_lane)
-                                if len(shifts) == 0 or not shifts[-1]['lane'] == j or not shifts[-1]['ind'][-1] in [i, i-1] or not shifts[-1]['side'] == 'right':
-                                    shifts.append({'lane': j, 'w': w, 'side': 'right', 'ind': [i], 'end': True, 'start': True})
-                                else:
-                                    shifts[-1]['w'] = max(shifts[-1]['w'], w)
-                                    shifts[-1]['ind'].append(i)
+                            add_shift(shifts, par, lanelet, i, j, k)
                     break
 
     # shift center trajectory for partially occupied space
@@ -2253,6 +2238,28 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
 
     return ref_traj, plan
 
+def add_shift(shifts, par, lanelet, i, j, k):
+    """add a shift to the referenece trajectory in order to avoid intersections with partially occupied space"""
+
+    if par['side'] == 'left':
+        w_lane = np.linalg.norm(lanelet.right_vertices[k, :] - lanelet.center_vertices[k, :])
+        w = 0.5*(par['width'][0] - w_lane)
+        if len(shifts) == 0 or not shifts[-1]['lane'] == j or \
+                not shifts[-1]['ind'][-1] in [i, i-1] or not shifts[-1]['side'] == 'left':
+            shifts.append({'lane': j, 'w': w, 'side': 'left', 'ind': [i], 'end': True, 'start': True})
+        else:
+            shifts[-1]['w'] = min(shifts[-1]['w'], w)
+            shifts[-1]['ind'].append(i)
+    else:
+        w_lane = np.linalg.norm(lanelet.left_vertices[k, :] - lanelet.center_vertices[k, :])
+        w = 0.5 * (par['width'][1] + w_lane)
+        if len(shifts) == 0 or not shifts[-1]['lane'] == j or \
+                not shifts[-1]['ind'][-1] in [i, i-1] or not shifts[-1]['side'] == 'right':
+            shifts.append({'lane': j, 'w': w, 'side': 'right', 'ind': [i], 'end': True, 'start': True})
+        else:
+            shifts[-1]['w'] = max(shifts[-1]['w'], w)
+            shifts[-1]['ind'].append(i)
+
 def correction_partially_occupied(center_traj, orthogonal, lanes, plan, lanelets, shifts):
     """correct the reference trajectory at areas where the lane is partially occupied"""
 
@@ -2265,18 +2272,34 @@ def correction_partially_occupied(center_traj, orthogonal, lanes, plan, lanelets
                 lanes[shifts[i]['lane']] in lanelets[lanes[shifts[i+1]['lane']]].predecessor:
             shifts[i]['end'] = False
             shifts[i+1]['start'] = False
+            shifts[i]['interp_end'] = 0
+            shifts[i+1]['interp_start'] = 0
+        elif i + 1 < len(shifts) and lanes[shifts[i]['lane']] in lanelets[lanes[shifts[i+1]['lane']]].predecessor:
+            val = int((shifts[i + 1]['ind'][0] - shifts[i]['ind'][-1])/2)
+            shifts[i]['interp_end'] = val
+            shifts[i + 1]['interp_start'] = val
 
     # loop over all shifts
     for s in shifts:
+
+        # get number of time steps for interpolation before and after the shift
+        interp_start = interp
+        interp_end = interp
+
+        if 'interp_start' in s.keys():
+            interp_start = min(interp, s['interp_start'])
+
+        if 'interp_end' in s.keys():
+            interp_end = min(interp, s['interp_end'])
 
         # extend shifted area if it is close to ths start or end
         s['ind'] = np.unique(s['ind'])
         index = [i for i in range(len(plan)) if len(center_traj[s['lane']][i]) > 0]
 
-        if s['ind'][0] - interp < index[0] and (s['lane'] == 0 or
+        if s['ind'][0] - interp_start < index[0] and (s['lane'] == 0 or
                                                 lanes[s['lane']-1] not in lanelets[lanes[s['lane']]].predecessor):
             s['ind'] = list(np.arange(index[0], s['ind'][-1] + 1))
-        if s['ind'][-1] + interp > index[-1] and (s['lane'] == len(lanes)-1 or
+        if s['ind'][-1] + interp_end > index[-1] and (s['lane'] == len(lanes)-1 or
                                                   lanes[s['lane']+1] not in lanelets[lanes[s['lane']]].successor):
             s['ind'] = list(np.arange(s['ind'][0], index[-1] + 1))
 
@@ -2295,7 +2318,7 @@ def correction_partially_occupied(center_traj, orthogonal, lanes, plan, lanelets
                 cnt = cnt - 1
                 ind = [i for i in range(len(plan)) if len(center_traj[cnt][i]) > 0]
                 min_index = ind[0]
-            min_index = max(min_index, s['ind'][0] - interp)
+            min_index = max(min_index, s['ind'][0] - interp_start)
 
             # interpolation before the shifted area
             cnt = s['lane']
@@ -2317,7 +2340,7 @@ def correction_partially_occupied(center_traj, orthogonal, lanes, plan, lanelets
                 cnt = cnt + 1
                 ind = [i for i in range(len(plan)) if len(center_traj[cnt][i]) > 0]
                 max_index = ind[-1]
-            max_index = min(max_index, s['ind'][-1] + interp)
+            max_index = min(max_index, s['ind'][-1] + interp_end)
 
             # interpolation after the shifted area
             cnt = s['lane']
@@ -2348,14 +2371,18 @@ def correct_orientation(ref_traj, lanelets, plan, lanes, lane_changes, param):
             right = np.concatenate((right, right_), axis=1)
             ind.append(lanes[i])
         else:
-            pgon = unite_successor_predecessor(Polygon(np.concatenate((left, np.fliplr(right)), axis=1).T), ind, lanelets)
+            pgon = Polygon(np.concatenate((left, np.fliplr(right)), axis=1).T)
+            pgon = add_predecessor(pgon, ind, lanelets, 0, param)
+            pgon = add_successor(pgon, ind, lanelets, 0, param)
             for j in ind:
                 pgons_lanes[j] = pgon
             ind = [lanes[i]]
             left = left_
             right = right_
 
-    pgon = unite_successor_predecessor(Polygon(np.concatenate((left, np.fliplr(right)), axis=1).T), ind, lanelets)
+    pgon = Polygon(np.concatenate((left, np.fliplr(right)), axis=1).T)
+    pgon = add_predecessor(pgon, ind, lanelets, 0, param)
+    pgon = add_successor(pgon, ind, lanelets, 0, param)
     for j in ind:
         pgons_lanes[j] = pgon
 
@@ -2369,7 +2396,8 @@ def correct_orientation(ref_traj, lanelets, plan, lanes, lane_changes, param):
         else:
             pgon = Polygon(np.concatenate((lanelets[l['lanes'][1]].left_vertices.T,
                                            np.fliplr(lanelets[l['lanes'][0]].right_vertices.T)), axis=1).T)
-        pgon = unite_successor_predecessor(pgon, l['lanes'], lanelets)
+        pgon = add_predecessor(pgon, l['lanes'], lanelets, 0, param)
+        pgon = add_successor(pgon, l['lanes'], lanelets, 0, param)
         pgons.append(pgon)
 
     # polygon for the car
@@ -2421,8 +2449,26 @@ def correct_orientation(ref_traj, lanelets, plan, lanes, lane_changes, param):
 
     return ref_traj
 
-def unite_successor_predecessor(pgon, ind, lanelets):
-    """unite lanelet sequence by the predecessor and sucessor lanelets"""
+def add_successor(pgon, ind, lanelets, length, param):
+    """unite lanelet sequence by the successor lanelets"""
+
+    if not pgon.is_valid:
+        pgon = pgon.buffer(0)
+
+    for s in lanelets[ind[-1]].successor:
+        left = np.concatenate((lanelets[ind[-1]].left_vertices.T, lanelets[s].left_vertices.T), axis=1)
+        right = np.concatenate((lanelets[ind[-1]].right_vertices.T, lanelets[s].right_vertices.T), axis=1)
+        tmp = Polygon(np.concatenate((left, np.fliplr(right)), axis=1).T)
+        if not tmp.is_valid:
+            tmp = tmp.buffer(0)
+        pgon = pgon.union(tmp)
+        if length + lanelets[s].distance[-1] < param['length_max']/2:
+            pgon = add_successor(pgon, [s], lanelets, length + lanelets[s].distance[-1], param)
+
+    return pgon
+
+def add_predecessor(pgon, ind, lanelets, length, param):
+    """unite lanelet sequence by the predecessor lanelets"""
 
     if not pgon.is_valid:
         pgon = pgon.buffer(0)
@@ -2434,14 +2480,8 @@ def unite_successor_predecessor(pgon, ind, lanelets):
         if not tmp.is_valid:
             tmp = tmp.buffer(0)
         pgon = pgon.union(tmp)
-
-    for s in lanelets[ind[-1]].successor:
-        left = np.concatenate((lanelets[ind[-1]].left_vertices.T, lanelets[s].left_vertices.T), axis=1)
-        right = np.concatenate((lanelets[ind[-1]].right_vertices.T, lanelets[s].right_vertices.T), axis=1)
-        tmp = Polygon(np.concatenate((left, np.fliplr(right)), axis=1).T)
-        if not tmp.is_valid:
-            tmp = tmp.buffer(0)
-        pgon = pgon.union(tmp)
+        if length + lanelets[p].distance[-1] < param['length_max']/2:
+            pgon = add_predecessor(pgon, [p], lanelets, length + lanelets[p].distance[-1], param)
 
     return pgon
 
