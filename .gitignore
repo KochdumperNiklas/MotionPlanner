@@ -3,5 +3,6 @@ __pycache__/
 *.pyc
 *.csv
 /videos/*
+/solutions/*
 /maneuverAutomaton/AROC/primitives/*
 /maneuverAutomaton/AROC/automaton/*
