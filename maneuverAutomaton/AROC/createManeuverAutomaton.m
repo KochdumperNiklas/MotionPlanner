@@ -176,6 +176,8 @@ end
 
 MA = maneuverAutomaton(primitives,@shiftInitSet,@shiftOccupancySet);
 
+save(fullfile(path),'automaton.mat'), 'MA');
+
 % export maneuver automaton to .xml-file
 file = fullfile(path,'automaton.zip');
 states = {'x','y','velocity','orientation'};
