@@ -86,3 +86,31 @@ class GeneratorSpaceController:
         # store the updated control law
         self.cnt = self.cnt + 1
         self.u = u
+
+class FeedbackController:
+    """class representing a feedback controller"""
+
+    def __init__(self, x_ref, u_ref, time, K):
+        """class constructor"""
+
+        # store object properties
+        self.x_ref = x_ref                  # reference trajectory
+        self.u_ref = u_ref                  # control inputs for the reference trajectory
+        self.time = time                    # time points for the reference trajectory
+        self.K = K                          # list of feedback matrices for each reference trajectory segment
+
+    def get_control_input(self, time, x):
+        """returns the control inputs for the control law for the given state at the given time"""
+
+        # determine time interval for the reference trajectory
+        ind = [i for i in range(len(self.time)) if self.time[i] <= time]
+        ind = ind[-1]
+
+        # determine state of the reference trajectory
+        x_ref = self.x_ref[:, [ind]] + (time - self.time[ind])/(self.time[ind+1] - self.time[ind]) * \
+                (self.x_ref[:, [ind+1]] - self.x_ref[:, [ind]])
+
+        # compute control input
+        u = self.u_ref[:, [ind]] + self.K[ind] @ (x - x_ref)
+
+        return u[:, 0]
