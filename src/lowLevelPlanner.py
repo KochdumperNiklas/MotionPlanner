@@ -1,114 +1,117 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from casadi import *
-import pypoman
-from scipy.integrate import solve_ivp
+from copy import deepcopy
+from scipy.integrate import solve_ivp, odeint
 from shapely.geometry import Polygon
 from shapely.geometry import Point
 from shapely.affinity import translate
-from commonroad.common.solution import CommonRoadSolutionWriter, Solution, PlanningProblemSolution, VehicleModel, VehicleType, CostFunction
-from commonroad.scenario.state import KSState, InputState
-from commonroad.scenario.trajectory import Trajectory
-from vehiclemodels.init_ks import init_ks
-from vehiclemodels.parameters_vehicle1 import parameters_vehicle1
-from vehiclemodels.vehicle_dynamics_ks import vehicle_dynamics_ks
+import control as ct
+from maneuverAutomaton.Controller import FeedbackController
 
-R = np.diag([1, 10.0])              # input cost matrix, penalty for inputs - [accel, steer]
-RD = np.diag([1, 10.0])             # input difference cost matrix, penalty for change of inputs - [accel, steer]
-
-def lowLevelPlanner(scenario, planning_problem, param, plan, vel, space_all, ref_traj):
+def lowLevelPlanner(scenario, planning_problem, param, plan, vel, space_all, ref_traj,
+                    feedback_control=False, collision_avoidance=False, R=np.diag([0, 0]),
+                    R_diff=np.diag([0, 0]), R_feedback=np.diag([0.1, 0.1]), Q_feedback=np.diag([1, 1, 3, 10])):
     """plan a concrete trajectory for the given high-level plan via optimization"""
 
     # construct initial guess for the trajectory
     init_guess = initial_guess(ref_traj, param)
 
     # plan the trajectory via optimization
-    x, u = optimal_control_problem(ref_traj, init_guess, vel, param)
+    x, u = optimal_control_problem(ref_traj, init_guess, R, R_diff, param)
 
     # simulate the planned trajectory to increase accuracy
     x, u = simulate_trajectory(x, u, param)
 
-    # create a CommonRoad solution object
-    sol = create_solution_object(scenario, planning_problem, x, u)
+    # construct feedback controller object that tracks the computed reference trajectory
+    controller = construct_feedback_controller(x, u, Q_feedback, R_feedback, feedback_control, param)
 
-    # write solution to a xml file
-    csw = CommonRoadSolutionWriter(sol)
-    name_scenario = str(scenario.scenario_id)
-    solution_name = f"solution_KS1:TR1:{name_scenario}:2020a.xml"
-
-    csw.write_to_file(output_path="/home/niklas/Documents/Repositories/MotionPlanner/vehicle", filename=solution_name, overwrite=True)
-
-    return x, u, sol
+    return x, u, controller
 
 def initial_guess(ref_traj, param):
     """compute an initial guess for the state trajectory and the control inputs for the given reference trajectory"""
 
-    # compute steering angle
-    steering_angle = [0]
+    # transform reference trajectory to rear axis
+    ref_traj = deepcopy(ref_traj)
 
-    for i in range(1, ref_traj.shape[1]-1):
+    for i in range(ref_traj.shape[1]):
+        ref_traj[0, i] = ref_traj[0, i] - np.cos(ref_traj[3, i]) * param['b']
+        ref_traj[1, i] = ref_traj[1, i] - np.sin(ref_traj[3, i]) * param['b']
+
+    # compute steering angle
+    steering_angle = []
+
+    for i in range(0, ref_traj.shape[1]-1):
         steering_angle.append(param['wheelbase'] * ((ref_traj[3, i+1] - ref_traj[3, i]) * param['time_step']) /
                               np.maximum(0.5 * (ref_traj[2, i+1] + ref_traj[2, i]), 0.1))
 
-    steering_angle.append(steering_angle[-1])
-
     # construct initial guesses for states and inputs
     steering_angle = np.maximum(-param['s_max'], np.minimum(param['s_max'], np.expand_dims(np.asarray(steering_angle), axis=0)))
-
-    steer_vel = np.maximum(-param['svel_max'], np.minimum(param['svel_max'], np.diff(steering_angle) / param['time_step']))
     acceleration = np.maximum(-param['a_max'], np.minimum(param['a_max'], np.diff(ref_traj[[2], :]) / param['time_step']))
 
     guess = {}
-    guess['x'] = np.concatenate((ref_traj[0:2, :], steering_angle, ref_traj[2:, :]), axis=0)
-    guess['u'] = np.concatenate((acceleration, steer_vel), axis=0)
+    guess['x'] = ref_traj
+    guess['u'] = np.concatenate((acceleration, steering_angle), axis=0)
 
     return guess
 
 def simulate_trajectory(x, u, param):
     """simulate the planned trajectory to increase the accuracy"""
 
-    def func_KS(t, x, u, p):
-        f = vehicle_dynamics_ks(x, u, p)
-        return f
+    # system dynamics
+    ode = lambda t, x, u: [x[2] * np.cos(x[3]),
+                           x[2] * np.sin(x[3]),
+                           u[0],
+                           x[2] * np.tan(u[1]) / param['wheelbase']]
 
     # loop over all time steps
-    p = parameters_vehicle1()
-
     for i in range(x.shape[1]-1):
-        sol = solve_ivp(func_KS, [0, param['time_step']], x[:, i], args=(u[[1, 0], i], p), dense_output=True)
+        sol = solve_ivp(ode, [0, param['time_step']], x[:, i], args=(u[:, i], ), dense_output=True)
         x[:, i+1] = sol.sol(param['time_step'])
+
+    # transform trajectory back to vehicle center
+    for i in range(x.shape[1]):
+        x[0, i] = x[0, i] + np.cos(x[3, i]) * param['b']
+        x[1, i] = x[1, i] + np.sin(x[3, i]) * param['b']
 
     return x, u
 
-def create_solution_object(scenario, planning_problem, x, u):
-    """create a CommonRoad solution object from the computed solution trajectory"""
+def construct_feedback_controller(x, u, Q, R, feedback_control, param):
+    """construct feedback controller object that tracks the computed reference trajectory"""
 
-    # generate state list of the ego vehicle's trajectory
-    state_list = []
+    # compute feedback matrices
+    if not feedback_control:
+        K = [np.zeros((4, 4)) for i in range(u.shape[1])]
+    else:
 
-    for i in range(x.shape[1]-1):
-        """state_list.append(KSState(**{'position': x[0:2, i], 'time_step': i, 'velocity': x[3, i],
-                                     'orientation': x[4, i], 'steering_angle': x[2, i]}))"""
-        state_list.append(InputState(**{'steering_angle_speed': u[1, i], 'acceleration': u[0, i], 'time_step': i}))
+        K = []
 
-    # create a trajectory object
-    trajectory = Trajectory(initial_time_step=0, state_list=state_list)
+        for i in range(u.shape[1]):
 
-    # create a planning problem solution object
-    planning_problem = list(planning_problem.planning_problem_dict.values())[0]
+            # linearize system dynamics
+            x_lin = 0.5 * (x[:, i] + x[:, i + 1])
+            u_lin = u[:, i]
 
-    pps = PlanningProblemSolution(planning_problem_id=planning_problem.planning_problem_id,
-                                  vehicle_type=VehicleType.FORD_ESCORT,
-                                  vehicle_model=VehicleModel.KS,
-                                  cost_function=CostFunction.TR1,
-                                  trajectory=trajectory)
+            A = np.array([[0, 0, np.cos(x_lin[3]), -x_lin[2]*np.sin(x_lin[3])],
+                          [0, 0, np.sin(x_lin[3]), x_lin[2]*np.cos(x_lin[3])],
+                          [0, 0, 0, 0],
+                          [0, 0, np.tan(u_lin[1])/param['wheelbase'], 0]])
+            B = np.array([[0, 0],
+                          [0, 0],
+                          [1, 0],
+                          [0, (x_lin[2]*(np.tan(u_lin[1])**2 + 1))/param['wheelbase']]])
 
-    # define the object with necessary attributes.
-    solution = Solution(scenario.scenario_id, [pps])
+            # compute feedback matrix using LQR controller
+            K_ = ct.lqr(A, B, Q, R)
+            K.append(K_[0])
 
-    return solution
+    # construct feedback controller object
+    t = param['time_step'] * np.arange(0, x.shape[1]+1)
+    controller = FeedbackController(x, u, t, K)
 
-def optimal_control_problem(ref_traj, init_guess, vel, param):
+    return controller
+
+def optimal_control_problem(ref_traj, init_guess, R, R_diff, param):
     """solve an optimal control problem to obtain a concrete trajectory"""
 
     # get vehicle model
@@ -118,48 +121,52 @@ def optimal_control_problem(ref_traj, init_guess, vel, param):
     opti = casadi.Opti()
 
     # initialize variables
-    x = opti.variable(nx, len(vel))
-    u = opti.variable(nu, len(vel)-1)
+    x = opti.variable(nx, ref_traj.shape[1])
+    u = opti.variable(nu, ref_traj.shape[1]-1)
 
     # construct initial state
-    x0 = np.array([param['x0'][0], param['x0'][1], 0, param['v_init'], param['orientation']])
+    x0 = np.array([param['x0'][0], param['x0'][1], param['v_init'], param['orientation']])
+
+    x0[0] = x0[0] - np.cos(x0[3]) * param['b']
+    x0[1] = x0[1] - np.sin(x0[3]) * param['b']
 
     # define cost function
     cost = 0
 
-    for i in range(len(vel)-1):
+    for i in range(ref_traj.shape[1]-1):
 
         # minimize control inputs
         cost += mtimes(mtimes(u[:, i].T, R), u[:, i])
 
         # minimize difference between consecutive control inputs
-        if i < len(vel) - 2:
-            cost += mtimes(mtimes((u[:, i] - u[:, i + 1]).T, RD), u[:, i] - u[:, i + 1])
+        if i < ref_traj.shape[1] - 2:
+            cost += mtimes(mtimes((u[:, i] - u[:, i + 1]).T, R_diff), u[:, i] - u[:, i + 1])
 
-        # minimize distance to reference trajectory
-        cost += (ref_traj[0, i] - x[0, i])**2 + (ref_traj[1, i] - x[1, i])**2
+    # minimize distance to reference trajectory
+    for i in range(ref_traj.shape[1]):
+        cost += (ref_traj[0, i] - x[0, i] - cos(x[3, i]) * param['b'])**2 + \
+                (ref_traj[1, i] - x[1, i] - sin(x[3, i]) * param['b'])**2
 
     opti.minimize(cost)
 
     # constraint (trajectory has to satisfy the differential equation)
-    for i in range(len(vel)-1):
+    for i in range(ref_traj.shape[1]-1):
         opti.subject_to(x[:, i + 1] == f(x[:, i], u[:, i]))
 
     # constraints on the control input
     opti.subject_to(u[0, :] >= -param['a_max'])
     opti.subject_to(u[0, :] <= param['a_max'])
-    opti.subject_to(u[1, :] >= -param['svel_max'])
-    opti.subject_to(u[1, :] <= param['svel_max'])
-    opti.subject_to(x[2, :] >= -param['s_max'])
-    opti.subject_to(x[2, :] <= param['s_max'])
+    opti.subject_to(u[1, :] >= -param['s_max'])
+    opti.subject_to(u[1, :] <= param['s_max'])
+    opti.subject_to(x[2, :] >= -0.01)
     opti.subject_to(x[:, 0] == x0)
 
     # constraint (Kamm's circle)
-    for i in range(len(vel) - 1):
-        opti.subject_to(u[0, i]**2 + (x[3, i]**2 * np.tan(x[2, i]) / param['wheelbase'])**2 <= param['a_max']**2)
+    for i in range(ref_traj.shape[1] - 1):
+        opti.subject_to(u[0, i]**2 + (x[2, i]**2 * tan(u[1, i]) / param['wheelbase'])**2 <= param['a_max']**2)
 
     # solver settings
-    opti.solver('ipopt', {'verbose': False, 'ipopt.print_level': 0})
+    opti.solver('ipopt')
     opti.set_initial(x, init_guess['x'])
     opti.set_initial(u, init_guess['u'])
 
@@ -178,22 +185,20 @@ def vehicle_model(param):
     # states
     sx = MX.sym("sx")
     sy = MX.sym("sy")
-    steer = MX.sym("steer")
     v = MX.sym("v")
     phi = MX.sym("phi")
 
-    x = vertcat(sx, sy, steer, v, phi)
+    x = vertcat(sx, sy, v, phi)
 
     # control inputs
     acc = MX.sym("acc")
-    steervel = MX.sym("steervel")
+    steer = MX.sym("steer")
 
-    u = vertcat(acc, steervel)
+    u = vertcat(acc, steer)
 
     # dynamic function
     ode = vertcat(v * cos(phi),
                   v * sin(phi),
-                  steervel,
                   acc,
                   v * tan(steer) / param['wheelbase'])
 
@@ -209,4 +214,4 @@ def vehicle_model(param):
 
     F = Function('F', [x, u], [x_next], ['x', 'u'], ['x_next'])
 
-    return F, 5, 2
+    return F, 4, 2
