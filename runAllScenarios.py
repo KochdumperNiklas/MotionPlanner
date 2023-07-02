@@ -20,12 +20,13 @@ from auxiliary.createVideo import createVideo
 from auxiliary.collisionChecker import collisionChecker
 from src.highLevelPlanner import highLevelPlanner
 from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
+from src.lowLevelPlannerOptimization import lowLevelPlannerOptimization
 
 import warnings
 warnings.filterwarnings("ignore")
 
-PLANNER = 'HighLevel'   # planner ('HighLevel', 'Automaton', 'AutomatonNaive' or 'Optimization')
-VIDEO = True           # create videos for all scenarios that can be solved
+PLANNER = 'Optimization'   # planner ('HighLevel', 'Automaton', 'AutomatonNaive' or 'Optimization')
+VIDEO = False           # create videos for all scenarios that can be solved
 TIMEOUT = 100           # maximum computation time
 
 def solve_scenario(file, return_dict, MA):
@@ -53,7 +54,7 @@ def solve_scenario(file, return_dict, MA):
             start_time = time.time()
             plan, vel, space, ref_traj = highLevelPlanner(scenario, planning_problem, param, compute_free_space=False,
                                                           desired_velocity='init')
-            x, u = lowLevelPlanner(scenario, planning_problem, param, plan, vel, space, ref_traj)
+            x, u, _ = lowLevelPlannerOptimization(scenario, planning_problem, param, plan, vel, space, ref_traj)
             comp_time = time.time() - start_time
         elif PLANNER == 'HighLevel':
             start_time = time.time()
