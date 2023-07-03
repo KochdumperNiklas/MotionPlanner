@@ -110,7 +110,7 @@ def construct_feedback_controller(x, u, Q, R, feedback_control, param):
 
             # compute feedback matrix using LQR controller
             K_ = ct.lqr(A, B, Q, R)
-            K.append(K_[0])
+            K.append(-K_[0])
 
     # construct feedback controller object
     t = param['time_step'] * np.arange(0, x.shape[1]+1)
