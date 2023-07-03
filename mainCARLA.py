@@ -35,6 +35,7 @@ from vehicle.vehicleParameter import vehicleParameter
 from maneuverAutomaton.ManeuverAutomaton import ManeuverAutomaton
 from src.highLevelPlanner import highLevelPlanner
 from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
+from src.lowLevelPlannerOptimization import lowLevelPlannerOptimization
 from auxiliary.prediction import prediction
 from auxiliary.overlappingLanelets import overlappingLanelets
 
@@ -56,13 +57,16 @@ from commonroad.scenario.obstacle import DynamicObstacle, ObstacleType
 import warnings
 warnings.filterwarnings("ignore")
 
-HORIZON = 30
-REPLAN = 5
-SENSORRANGE = 100
-CARS = 200
-MAP = 'Town03'
-VISUALIZE = True
-VIDEO = True
+MAP = 'Town01'                      # CARLA map
+PLANNER = 'Optimization'            # motion planner ('Automaton' or 'Optimization')
+HORIZON = 3                         # planning horizon (in seconds)
+REPLAN = 0.5                        # time after which the trajectory is re-planned (in seconds)
+FREQUENCY = 100                     # control frequency (in Hertz)
+SENSORRANGE = 100                   # sensor range of the car (in meters)
+CARS = 100                          # number of cars in the map
+REAL_DYNAMICS = True                # use real car dynamics from the CARLA vehicle model
+VISUALIZE = True                    # visualize the planned trajectory
+VIDEO = True                        # create a video
 
 
 class CarlaSyncMode(object):
@@ -78,7 +82,7 @@ class CarlaSyncMode(object):
         self.world = world
         self.sensors = sensors
         self.frame = None
-        self.delta_seconds = 1.0 / kwargs.get('fps', 20)
+        self.delta_seconds = 1.0 / kwargs.get('fps', FREQUENCY)
         self._queues = []
         self._settings = None
 
@@ -186,6 +190,7 @@ def main():
     cnt_init = 0
     cnt_time = REPLAN
     plt.figure(figsize=(7, 7))
+    horizon = np.round(HORIZON/scenario.dt)
 
     if VIDEO:
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
@@ -226,7 +231,7 @@ def main():
         actor_list.append(camera_rgb)
 
         # main control loop
-        with CarlaSyncMode(world, camera_rgb, fps=10) as sync_mode:
+        with CarlaSyncMode(world, camera_rgb, fps=FREQUENCY) as sync_mode:
             while True:
                 if should_quit():
                     return
@@ -235,13 +240,13 @@ def main():
                 snapshot, image_rgb = sync_mode.tick(timeout=2.0)
 
                 # plan a new trajectory
-                if cnt_time < REPLAN:
+                if time < REPLAN:
 
-                    cnt_time = cnt_time + 1
+                    time = time + 1/FREQUENCY
 
                 else:
 
-                    cnt_time = 0
+                    time = 0
 
                     # predict the future positions of the other vehicles
                     scenario_ = deepcopy(scenario)
@@ -270,7 +275,7 @@ def main():
                                                                state)
                             scenario_.add_objects(dynamic_obstacle)
 
-                    scenario_ = prediction(scenario_, HORIZON, x0, overlapping_lanelets=overlaps)
+                    scenario_ = prediction(scenario_, horizon, x0, overlapping_lanelets=overlaps)
 
                     # consider red traffic lights
                     points_all = []
@@ -313,7 +318,7 @@ def main():
                                     test = 1
                                 lanes = list(np.unique(np.asarray(lanes)))
                             if len(lanes) > 0:
-                                cycle = TrafficLightCycleElement(TrafficLightState('red'), HORIZON * scenario.dt)
+                                cycle = TrafficLightCycleElement(TrafficLightState('red'), horizon * scenario.dt)
                                 traffic_light = TrafficLight(scenario_.generate_object_id(), [cycle])
                                 _ = scenario_.lanelet_network.add_traffic_light(traffic_light, lanes)
 
@@ -330,14 +335,14 @@ def main():
                     goal_states = []
                     lanelets_of_goal_position = {}
 
-                    dist_max = x0[2] * scenario.dt * HORIZON + 0.5 * param['a_max'] * (scenario.dt * HORIZON) ** 2
+                    dist_max = x0[2] * scenario.dt * horizon + 0.5 * param['a_max'] * (scenario.dt * horizon) ** 2
                     dist = 0
 
                     for i in range(cnt_init, len(route.list_ids_lanelets)):
                         goal_id = route.list_ids_lanelets[i]
                         goal_lane = scenario.lanelet_network.find_lanelet_by_id(goal_id)
                         goal_states.append(
-                            CustomState(time_step=Interval(HORIZON, HORIZON), position=goal_lane.polygon))
+                            CustomState(time_step=Interval(horizon, horizon), position=goal_lane.polygon))
                         lanelets_of_goal_position[len(goal_states) - 1] = [goal_id]
                         if i > cnt_init:
                             dist = dist + goal_lane.distance[-1]
@@ -355,15 +360,45 @@ def main():
                     pickle.dump(data, filehandler)
 
                     # solve motion planning problem
-                    plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param)
-                    x, u = lowLevelPlannerManeuverAutomaton(scenario_, planning_problem, param, plan, vel, space,
-                                                            ref_traj, MA)
+                    plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param,
+                                                                  desired_velocity='speed_limit')
+
+                    if PLANNER == 'Automaton':
+                        x, u = lowLevelPlannerManeuverAutomaton(scenario_, planning_problem, param, plan, vel, space,
+                                                                ref_traj, MA)
+                    elif PLANNER == 'Optimization':
+                        x, u, controller = lowLevelPlannerOptimization(scenario_, planning_problem, param, plan, vel,
+                                                                       space, ref_traj, feedback_control=True)
+                    else:
+                        raise Exception('Motion planner not supported! The available planners are "Automaton" and "Optimization".')
 
                 # update car position and orientation
-                x0 = x[:, cnt_time]
-                pose = Transform(Location(x=x0[0], y=-x0[1], z=0.3),
-                                 Rotation(pitch=0.0, yaw=-np.rad2deg(x0[3]), roll=0.0))
-                vehicle.set_transform(pose)
+                if REAL_DYNAMICS:
+                    transform = vehicle.get_transform()
+                    velocity = vehicle.get_velocity()
+                    velocity = np.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+
+                    x_meas = np.expand_dims(np.array([transform.location.x, -transform.location.y,
+                                                      velocity, np.deg2rad(transform.rotation.yaw)]), axis=1)
+
+                    x_meas[0, 0] = x_meas[0, 0] - np.cos(x_meas[3, 0]) * param['b']
+                    x_meas[1, 0] = x_meas[1, 0] - np.sin(x_meas[3, 0]) * param['b']
+
+                    u = controller.get_control_input(time, x_meas)
+
+                    acc = u[0] / 6.17
+                    steer = u[1]
+
+                    if acc > 0:
+                        vehicle.apply_control(carla.VehicleControl(throttle=acc, brake=0, steer=steer))
+                    else:
+                        vehicle.apply_control(carla.VehicleControl(throttle=0, brake=-acc, steer=steer))
+
+                else:
+                    x0 = x[:, np.floor(time/param['time_step'])]
+                    pose = Transform(Location(x=x0[0], y=-x0[1], z=0.3),
+                                     Rotation(pitch=0.0, yaw=-np.rad2deg(x0[3]), roll=0.0))
+                    vehicle.set_transform(pose)
 
                 # draw the display.
                 draw_image(display, image_rgb)
@@ -376,8 +411,8 @@ def main():
                     rnd = MPRenderer()
                     canvas = FigureCanvasAgg(rnd.f)
 
-                    rnd.draw_params.time_begin = cnt_time
-                    rnd.draw_params.time_end = HORIZON
+                    rnd.draw_params.time_begin = np.floor(time/param['time_step'])
+                    rnd.draw_params.time_end = horizon
                     rnd.draw_params.planning_problem_set.planning_problem.initial_state.state.draw_arrow = False
                     rnd.draw_params.planning_problem_set.planning_problem.initial_state.state.radius = 0
                     scenario.draw(rnd)
