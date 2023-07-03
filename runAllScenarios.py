@@ -77,7 +77,7 @@ def solve_scenario(file, return_dict, MA):
             if VIDEO:
                 createVideo(f, scenario, planning_problem, param, x)
     except Exception as e:
-        comp_time = str(e)
+        comp_time = str(e).replace("\n", "")
         print(f + ': ' + str(e))
 
     return_dict['comp_time'] = comp_time
