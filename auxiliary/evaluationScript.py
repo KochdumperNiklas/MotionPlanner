@@ -17,7 +17,7 @@ def evaluation_matrics(data):
             if d[2] == 'collision':
                 collisions = collisions + 1
 
-    return success/len(data) * 100, comp_time/len(data), collisions/success * 100
+    return success/len(data) * 100, comp_time/success, collisions/success * 100
 
 def print_results(success, comp_time, collisions):
     """print the performance metrics to the console"""
