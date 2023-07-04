@@ -61,7 +61,7 @@ MAP = 'Town01'                      # CARLA map
 PLANNER = 'Optimization'            # motion planner ('Automaton' or 'Optimization')
 HORIZON = 3                         # planning horizon (in seconds)
 REPLAN = 0.5                        # time after which the trajectory is re-planned (in seconds)
-FREQUENCY = 100                     # control frequency (in Hertz)
+FREQUENCY = 50                     # control frequency (in Hertz)
 SENSORRANGE = 100                   # sensor range of the car (in meters)
 CARS = 100                          # number of cars in the map
 REAL_DYNAMICS = True                # use real car dynamics from the CARLA vehicle model
@@ -152,6 +152,7 @@ def main():
 
     # load parameter for the car
     param = vehicleParameter()
+    param['a_max'] = 5
 
     # load maneuver automaton
     filehandler = open('./maneuverAutomaton/maneuverAutomaton.obj', 'rb')
@@ -188,13 +189,14 @@ def main():
     start_pose = Transform(Location(x=x0[0], y=-x0[1], z=0.1), Rotation(pitch=0.0, yaw=-np.rad2deg(x0[3]), roll=0.0))
     lanelet = route.list_ids_lanelets[0]
     cnt_init = 0
-    cnt_time = REPLAN
+    traj = {'x': [x0], 'u': [], 't': [0]}
+    time = REPLAN
     plt.figure(figsize=(7, 7))
-    horizon = np.round(HORIZON/scenario.dt)
+    horizon = int(np.round(HORIZON/scenario.dt))
 
     if VIDEO:
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-        video = cv2.VideoWriter(os.path.join('auxiliary', 'videoCARLA.mp4'), fourcc, 10, (800+600, 600))
+        video = cv2.VideoWriter(os.path.join('auxiliary', 'videoCARLA.mp4'), fourcc, FREQUENCY, (800+600, 600))
 
     # set weather
     w = [carla.WeatherParameters.ClearNoon, carla.WeatherParameters.CloudyNoon, carla.WeatherParameters.WetNoon,
@@ -222,7 +224,7 @@ def main():
         blueprint_library = world.get_blueprint_library()
         vehicle = world.spawn_actor(blueprint_library.find('vehicle.tesla.model3'), start_pose)
         actor_list.append(vehicle)
-        vehicle.set_simulate_physics(False)
+        vehicle.set_simulate_physics(REAL_DYNAMICS)
 
         # select camara view
         camera_rgb = world.spawn_actor(blueprint_library.find('sensor.camera.rgb'),
@@ -248,6 +250,13 @@ def main():
 
                     time = 0
 
+                    # get current position of the ego vehicle
+                    transform = vehicle.get_transform()
+                    velocity = vehicle.get_velocity()
+                    velocity = np.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+
+                    x0 = np.array([transform.location.x, -transform.location.y, velocity, -np.deg2rad(transform.rotation.yaw)])
+
                     # predict the future positions of the other vehicles
                     scenario_ = deepcopy(scenario)
 
@@ -264,11 +273,8 @@ def main():
                                 length = 2
                             if width == 0:
                                 width = 1
-                            vehicles.append({'width': width, 'length': length, 'x': transform.location.x,
-                                             'y': -transform.location.y, 'velocity': velocity,
-                                             'orientation': -orientation})
 
-                            state = CustomState(position=np.array([transform.location.x, transform.location.y]),
+                            state = CustomState(position=np.array([transform.location.x, -transform.location.y]),
                                                 velocity=velocity, orientation=-orientation, time_step=0)
                             shape = Rectangle(width=width, length=length)
                             dynamic_obstacle = DynamicObstacle(scenario.generate_object_id(), ObstacleType.CAR, shape,
@@ -361,13 +367,15 @@ def main():
 
                     # solve motion planning problem
                     plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param,
-                                                                  desired_velocity='speed_limit')
+                                                                  desired_velocity='speed_limit', weight_safe_distance=10000)
 
                     if PLANNER == 'Automaton':
                         x, u = lowLevelPlannerManeuverAutomaton(scenario_, planning_problem, param, plan, vel, space,
                                                                 ref_traj, MA)
                     elif PLANNER == 'Optimization':
-                        x, u, controller = lowLevelPlannerOptimization(scenario_, planning_problem, param, plan, vel,
+                        param_ = deepcopy(param)
+                        param_['a_max'] = 6
+                        x, u, controller = lowLevelPlannerOptimization(scenario_, planning_problem, param_, plan, vel,
                                                                        space, ref_traj, feedback_control=True)
                     else:
                         raise Exception('Motion planner not supported! The available planners are "Automaton" and "Optimization".')
@@ -379,7 +387,9 @@ def main():
                     velocity = np.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
 
                     x_meas = np.expand_dims(np.array([transform.location.x, -transform.location.y,
-                                                      velocity, np.deg2rad(transform.rotation.yaw)]), axis=1)
+                                                      velocity, -np.deg2rad(transform.rotation.yaw)]), axis=1)
+
+                    traj['x'].append(x_meas[:, 0])
 
                     x_meas[0, 0] = x_meas[0, 0] - np.cos(x_meas[3, 0]) * param['b']
                     x_meas[1, 0] = x_meas[1, 0] - np.sin(x_meas[3, 0]) * param['b']
@@ -387,12 +397,17 @@ def main():
                     u = controller.get_control_input(time, x_meas)
 
                     acc = u[0] / 6.17
-                    steer = u[1]
+                    steer = -u[1]
 
                     if acc > 0:
-                        vehicle.apply_control(carla.VehicleControl(throttle=acc, brake=0, steer=steer))
+                        vehicle.apply_control(carla.VehicleControl(throttle=acc, brake=0, steer=steer, manual_gear_shift=True, gear=2))
                     else:
-                        vehicle.apply_control(carla.VehicleControl(throttle=0, brake=-acc, steer=steer))
+                        vehicle.apply_control(carla.VehicleControl(throttle=0, brake=-acc, steer=steer, manual_gear_shift=True, gear=2))
+
+                    traj['u'].append(np.array([acc, steer]))
+                    traj['t'].append(traj['t'][-1] + 1 / FREQUENCY)
+                    filehandler = open(os.path.join('trajectories', 'trajectory.obj'), 'wb')
+                    pickle.dump(traj, filehandler)
 
                 else:
                     x0 = x[:, np.floor(time/param['time_step'])]
@@ -411,7 +426,8 @@ def main():
                     rnd = MPRenderer()
                     canvas = FigureCanvasAgg(rnd.f)
 
-                    rnd.draw_params.time_begin = np.floor(time/param['time_step'])
+                    cnt_time = int(np.floor(time/param['time_step']))
+                    rnd.draw_params.time_begin = cnt_time
                     rnd.draw_params.time_end = horizon
                     rnd.draw_params.planning_problem_set.planning_problem.initial_state.state.draw_arrow = False
                     rnd.draw_params.planning_problem_set.planning_problem.initial_state.state.radius = 0
