@@ -96,7 +96,7 @@ def prediction(scenario, horizon, x_ego, overlapping_lanelets=None, most_likely=
             lanes = deepcopy(node['lanelets'])
 
             # loop over all time steps
-            for i in range(len(node['states']), horizon):
+            for i in range(len(node['states']), horizon+1):
 
                 dist = x[i] - node['dist']
 
@@ -131,7 +131,7 @@ def prediction(scenario, horizon, x_ego, overlapping_lanelets=None, most_likely=
                             break
 
                 # check if trajectory length reached horizon -> finished
-                if i == horizon - 1:
+                if i == horizon:
                     trajectories.append({'trajectory': deepcopy(states), 'lanelets': deepcopy(lanes), 'vehicle': v})
 
     # add all trajectories to the CommonRoad traffic scenario
