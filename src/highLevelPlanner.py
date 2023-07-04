@@ -2612,57 +2612,66 @@ def trajectory_position_velocity(space, plan, vel_prof, lanelets, safe_dist, par
     dist = 0
 
     # loop over all time steps
-    for i in range(len(plan)-1):
+    for i in range(len(plan) - 1):
 
         # shift space if moving on to a successor lanelet
-        if plan[i+1] != plan[i] and plan[i+1] in lanelets[plan[i]].successor:
+        if plan[i + 1] != plan[i] and plan[i + 1] in lanelets[plan[i]].successor:
             dist = dist + lanelets[plan[i]].distance[-1]
 
-        space[i+1] = translate(space[i+1], dist, 0)
+        space[i + 1] = translate(space[i + 1], dist, 0)
 
         # compute the next position when driving with the desired velocity
-        a = (v[i+1] - v[i])/dt
-        x[i+1] = x[i] + v[i]*dt + 0.5 * a * dt**2
+        a = (v[i + 1] - v[i]) / dt
+        x[i + 1] = x[i] + v[i] * dt + 0.5 * a * dt ** 2
 
         # check if point satisfies safe distance to other cars and correct it if not
-        for s in safe_dist[plan[i+1]][i+1]:
-            if s['l'] <= space_orig[i+1].bounds[0] and s['u'] >= space_orig[i+1].bounds[2]:
+        for s in safe_dist[plan[i + 1]][i + 1]:
+            if s['l'] <= space_orig[i + 1].bounds[0] and s['u'] >= space_orig[i + 1].bounds[2]:
                 if s['l_safe'] < s['u_safe']:
-                    if s['l_safe'] + dist <= x[i+1] <= s['u_safe'] + dist:
-                        x_des = x[i+1]
-                    elif x[i+1] > s['u_safe'] + dist:
+                    if s['l_safe'] + dist <= x[i + 1] <= s['u_safe'] + dist:
+                        x_des = x[i + 1]
+                    elif x[i + 1] > s['u_safe'] + dist:
                         x_des = s['u_safe'] + dist
                     else:
                         x_des = s['l_safe'] + dist
                 else:
-                    x_des = 0.5*(s['l_safe'] + s['u_safe']) + dist
+                    x_des = 0.5 * (s['l_safe'] + s['u_safe']) + dist
                 break
 
-        if x[i+1] != x_des:
+        if x[i + 1] != x_des:
             factor = param['weight_velocity'] / (param['weight_velocity'] + param['weight_safe_distance'])
-            x_des = x_des + factor * (x[i+1] - x_des)
+            x[i + 1] = x_des + factor * (x[i + 1] - x_des)
 
-        # check if driving the desired velocity profile is feasible
-        if x_des != x[i+1] or not space[i+1].contains(Point(x[i+1], v[i+1])):
+    # update velocity profile
+    for i in range(len(x)-1):
+        v[i+1] = max(v[i]-a_max*dt, min(2*(x[i+1] - x[i])/dt - v[i], v[i]+a_max*dt))
 
-            # determine the best feasible acceleration
-            p1 = (x[i] + v[i]*dt + 0.5 * a_max * dt**2, v[i] + a_max * dt)
-            p2 = (x[i] + v[i]*dt - 0.5 * a_max * dt**2, v[i] - a_max * dt)
-            pgon = space[i+1].intersection(LineString([p1, p2]))
+    # check if driving the desired velocity profile is feasible
+    if not space[-1].contains(Point(x[-1], v[-1])):
+        p = nearest_points(space[-1], Point(x[-1], v[-1]))[0]
+        x[-1] = p.x
+        v[-1] = p.y
 
-            if not pgon.is_empty:
-                p = nearest_points(pgon, Point(x_des, v[i+1]))[0]
-            elif space[i+1].exterior.distance(Point(p1[0], p1[1])) < 1e-10:
-                p = Point(p1[0], p1[1])
-            elif space[i+1].exterior.distance(Point(p2[0], p2[1])) < 1e-10:
-                p = Point(p2[0], p2[1])
-            else:
-                p = nearest_points(space[i + 1], LineString([p1, p2]))[0]
-                if space[i+1].exterior.distance(p) > 1e-10:
-                    raise Exception("Space not driveable!")
+    for i in range(len(space)-1, 0, -1):
 
-            x[i+1] = p.x
-            v[i+1] = p.y
+        # determine the best feasible acceleration
+        p1 = (x[i] - v[i] * dt - 0.5 * a_max * dt ** 2, v[i] + a_max * dt)
+        p2 = (x[i] - v[i] * dt + 0.5 * a_max * dt ** 2, v[i] - a_max * dt)
+        pgon = space[i-1].intersection(LineString([p1, p2]))
+
+        if not pgon.is_empty:
+            p = nearest_points(pgon, Point(x[i-1], v[i-1]))[0]
+        elif space[i - 1].exterior.distance(Point(p1[0], p1[1])) < 1e-10:
+            p = Point(p1[0], p1[1])
+        elif space[i - 1].exterior.distance(Point(p2[0], p2[1])) < 1e-10:
+            p = Point(p2[0], p2[1])
+        else:
+            p = nearest_points(space[i - 1], LineString([p1, p2]))[0]
+            if space[i - 1].exterior.distance(p) > 1e-10:
+                raise Exception("Space not driveable!")
+
+        x[i - 1] = p.x
+        v[i - 1] = p.y
 
     return x, v
 
