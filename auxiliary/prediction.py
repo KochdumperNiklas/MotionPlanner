@@ -58,7 +58,7 @@ def prediction(scenario, horizon, x_ego, overlapping_lanelets=None, most_likely=
     for v in vehicles:
 
         # predict x-position of the vehicle under the assumption of constant velocity
-        vel = v['velocity'] + scenario.dt * v['acceleration'] * np.linspace(0, horizon-1, num=horizon)
+        vel = v['velocity'] + scenario.dt * v['acceleration'] * np.linspace(0, horizon, num=horizon+1)
         x = np.zeros((len(vel)))
 
         for i in range(len(vel)-1):
