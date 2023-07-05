@@ -2694,7 +2694,7 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
 
         # update velocity profile
         for i in range(len(x)-1):
-            v[i+1] = max(v[i]-a_max*dt, min(2*(x[i+1] - x[i])/dt - v[i], v[i]+a_max*dt))
+            v[i+1] = (x[i+1] - x[i])/dt
 
         # check if driving the desired velocity profile is feasible
         if not space[-1].contains(Point(x[-1], v[-1])):
