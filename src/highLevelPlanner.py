@@ -2130,9 +2130,7 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
 
     # compute suitable velocity profile
     x, v = trajectory_position_velocity(deepcopy(space), plan, vel_prof, lanelets, safe_dist, param)
-
-    if param['weight_safe_distance'] > 0:
-        x, v = improve_trajectory_position_velocity(deepcopy(space), plan, x, v, lanelets, safe_dist, param)
+    x, v = improve_trajectory_position_velocity(deepcopy(space), plan, x, v, lanelets, safe_dist, param)
 
     # update plan (= lanelet-time-assignment)
     plan = np.asarray(plan)
@@ -2658,8 +2656,8 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
     dt = param['time_step']
     a_max = param['a_max']
     space_orig = deepcopy(space)
-    different = False
     dist = 0
+    corrections = [0]
 
     # loop over all time steps
     for i in range(len(plan) - 1):
@@ -2687,41 +2685,65 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
         if x[i + 1] != x_des:
             factor = param['weight_velocity'] / (param['weight_velocity'] + param['weight_safe_distance'])
             x[i + 1] = x_des + factor * (x[i + 1] - x_des)
-            different = True
+            corrections.append(i+1)
+        else:
+            if abs(space[i+1].bounds[0] - x[i+1]) < 0.001:
+                x[i+1] = min(x[i+1] + 0.1, x[i+1] - 0.5*(space[i+1].bounds[2] - space[i+1].bounds[0]))
+                corrections.append(i+1)
+            elif abs(space[i+1].bounds[2] - x[i+1]) < 0.001:
+                x[i + 1] = max(x[i + 1] - 0.1, x[i + 1] + 0.5 * (space[i + 1].bounds[2] - space[i + 1].bounds[0]))
+                corrections.append(i+1)
 
-    # compute improved trajectory
-    if different:
+    if not corrections[-1] == len(x)-1:
+        corrections.append(len(x)-1)
 
-        # update velocity profile
-        for i in range(len(x)-1):
-            v[i+1] = (x[i+1] - x[i])/dt
+    # update velocity profile
+    for i in range(1, len(x)):
+        if i == len(x)-1:
+            v[i] = (x[i] - x[i-1])/dt
+        else:
+            v[i] = 0.5*((x[i + 1] - x[i]) / dt + (x[i] - x[i-1])/dt)
 
-        # check if driving the desired velocity profile is feasible
-        if not space[-1].contains(Point(x[-1], v[-1])):
-            p = nearest_points(space[-1], Point(x[-1], v[-1]))[0]
-            x[-1] = p.x
-            v[-1] = p.y
+    for i in range(1, len(corrections)):
+        start = corrections[i-1]
+        end = corrections[i]
+        t_final = (end-start)*dt
+        if end-start > 1:
+            b = -5.0 / 6.0 * (x[end]-x[start] - 0.5 * t_final * (v[start] + v[end])) / t_final ** 3
+            a = (v[end] - v[start] - b * t_final ** 2) / t_final
 
-        for i in range(len(space)-1, 0, -1):
+            for j in range(start, end+1):
+                v[j] = v[start] + a * j * dt + b * (j*dt)**2
 
-            # determine the best feasible acceleration
-            p1 = (x[i] - v[i] * dt - 0.5 * a_max * dt ** 2, v[i] + a_max * dt)
-            p2 = (x[i] - v[i] * dt + 0.5 * a_max * dt ** 2, v[i] - a_max * dt)
-            pgon = space[i-1].intersection(LineString([p1, p2]))
+            for j in range(start+1, end+1):
+                x[j] = x[j-1] + v[j]*dt + 0.5*(v[j] - v[j-1])*dt
 
-            if not pgon.is_empty:
-                p = nearest_points(pgon, Point(x[i-1], v[i-1]))[0]
-            elif space[i - 1].exterior.distance(Point(p1[0], p1[1])) < 1e-10:
-                p = Point(p1[0], p1[1])
-            elif space[i - 1].exterior.distance(Point(p2[0], p2[1])) < 1e-10:
-                p = Point(p2[0], p2[1])
-            else:
-                p = nearest_points(space[i - 1], LineString([p1, p2]))[0]
-                if space[i - 1].exterior.distance(p) > 1e-10:
-                    raise Exception("Space not driveable!")
+    # check if driving the desired velocity profile is feasible
+    if not space[-1].contains(Point(x[-1], v[-1])):
+        p = nearest_points(space[-1], Point(x[-1], v[-1]))[0]
+        x[-1] = p.x
+        v[-1] = p.y
 
-            x[i - 1] = p.x
-            v[i - 1] = p.y
+    for i in range(len(space)-1, 0, -1):
+
+        # determine the best feasible acceleration
+        p1 = (x[i] - v[i] * dt - 0.5 * a_max * dt ** 2, v[i] + a_max * dt)
+        p2 = (x[i] - v[i] * dt + 0.5 * a_max * dt ** 2, v[i] - a_max * dt)
+        pgon = space[i-1].intersection(LineString([p1, p2]))
+
+        if not pgon.is_empty:
+            p = nearest_points(pgon, Point(x[i-1], v[i-1]))[0]
+        elif space[i - 1].exterior.distance(Point(p1[0], p1[1])) < 1e-10:
+            p = Point(p1[0], p1[1])
+        elif space[i - 1].exterior.distance(Point(p2[0], p2[1])) < 1e-10:
+            p = Point(p2[0], p2[1])
+        else:
+            p = nearest_points(space[i - 1], LineString([p1, p2]))[0]
+            if space[i - 1].exterior.distance(p) > 1e-10:
+                raise Exception("Space not driveable!")
+
+        x[i - 1] = p.x
+        v[i - 1] = p.y
 
     return x, v
 
