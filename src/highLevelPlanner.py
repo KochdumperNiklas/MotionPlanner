@@ -2691,6 +2691,7 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
                         type = 'lower'
                 else:
                     x_des = 0.5 * (s['l_safe'] + s['u_safe']) + dist
+                    type = 'both'
                 break
 
         if x[i + 1] != x_des:
