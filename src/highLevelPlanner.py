@@ -704,7 +704,7 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
             v_max = speed_limit[id]
 
         # check if it is possible to slow down to the maximum velocity in time
-        if v_max < param['v0']:
+        if v_max < param['v_init']:
             t = (param['v_init'] - v_max) / param['a_max']
             dist_break = param['v_init'] * t - 0.5 * param['a_max'] * t ** 2 + 0.2
             if dist_break > dist_init[id]:
