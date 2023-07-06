@@ -102,6 +102,10 @@ class FeedbackController:
     def get_control_input(self, time, x):
         """returns the control inputs for the control law for the given state at the given time"""
 
+        # consider 2*pi periodicallity for the orientation
+        tmp = x[3, 0] - self.x_ref[3, 0]
+        x[3, 0] = self.x_ref[3, 0] + np.mod(tmp + np.pi, 2 * np.pi) - np.pi
+
         # determine time interval for the reference trajectory
         ind = [i for i in range(len(self.time)) if self.time[i] <= time]
         ind = ind[-1]
