@@ -469,7 +469,7 @@ def velocity_profile_single(dist, vel_des, x0_ind, goal, param):
                 x_final = dist_min
                 t_final = goal['time_end']
 
-            b = -5.0/6.0 * (x_final - 0.5*t_final*(param['v_init'] + vel_final))/t_final**3
+            b = 6.0 * (-x_final + 0.5*t_final*(param['v_init'] + vel_final))/t_final**3
             a = (vel_final - param['v_init'] - b * t_final ** 2)/t_final
 
             vel = [param['v_init'] + a * t + b * t**2 for t in range(param['steps']+1)]
@@ -2698,25 +2698,28 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
         corrections.append(len(x)-1)
 
     # update velocity profile
-    for i in range(1, len(x)):
-        if i == len(x)-1:
-            v[i] = (x[i] - x[i-1])/dt
-        else:
-            v[i] = 0.5*((x[i + 1] - x[i]) / dt + (x[i] - x[i-1])/dt)
+    for k in range(5):
+        for i in range(1, len(x)):
+            if i == len(x)-1:
+                v[i] = (x[i] - x[i-1])/dt
+            else:
+                v[i] = 0.5*((x[i + 1] - x[i]) / dt + (x[i] - x[i-1])/dt)
 
-    for i in range(1, len(corrections)):
-        start = corrections[i-1]
-        end = corrections[i]
-        t_final = (end-start)*dt
-        if end-start > 1:
-            b = -5.0 / 6.0 * (x[end]-x[start] - 0.5 * t_final * (v[start] + v[end])) / t_final ** 3
-            a = (v[end] - v[start] - b * t_final ** 2) / t_final
+        for i in range(1, len(corrections)):
+            start = corrections[i-1]
+            end = corrections[i]
+            t_final = (end-start)*dt
+            if end-start > 1:
+                b = 6*(x[start]-x[end]+0.5*v[start]*t_final+0.5*v[end]*t_final)/(t_final**3)
+                a = (v[end] - v[start] - b*t_final**2)/t_final
 
-            for j in range(start, end+1):
-                v[j] = v[start] + a * j * dt + b * (j*dt)**2
+                for j in range(start, end+1):
+                    t = (j-start)*dt
+                    v[j] = v[start] + a * t + b * t**2
 
-            for j in range(start+1, end+1):
-                x[j] = x[j-1] + v[j]*dt + 0.5*(v[j] - v[j-1])*dt
+                for j in range(start+1, end+1):
+                    t = (j-start)*dt
+                    x[j] = x[start] + v[start]*t + 0.5*a*t**2 + 1/3 * b * t**3
 
     # check if driving the desired velocity profile is feasible
     if not space[-1].contains(Point(x[-1], v[-1])):
