@@ -696,12 +696,21 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
         l = lanelets[id]
         free_space = []
 
+        # set maximum velocity for the lanelet
         v_min = param['v_min']
         if speed_limit[id] is None:
             v_max = param['v_max']
         else:
             v_max = speed_limit[id]
 
+        # check if it is possible to slow down to the maximum velocity in time
+        if v_max < param['v0']:
+            t = (param['v_init'] - v_max) / param['a_max']
+            dist_break = param['v_init'] * t - 0.5 * param['a_max'] * t ** 2 + 0.2
+            if dist_break > dist_init[id]:
+                v_max = param['v_init'] + 0.2
+
+        # loop over all obstacles
         for o in occupied_space[id]:
 
             if len(o) > 0:
