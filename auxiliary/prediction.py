@@ -108,7 +108,7 @@ def prediction(scenario, horizon, x_ego, overlapping_lanelets=None, most_likely=
                         abort = True
                         break
 
-                if abort:
+                if abort and len(states) > 1:
                     trajectories.append({'trajectory': deepcopy(states), 'lanelets': deepcopy(lanes), 'vehicle': v})
                     break
 
