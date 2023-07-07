@@ -29,6 +29,7 @@ import numpy as np
 import os
 import pickle
 import cv2
+import time
 from copy import deepcopy
 
 from vehicle.vehicleParameter import vehicleParameter
@@ -61,7 +62,7 @@ MAP = 'Town01'                      # CARLA map
 PLANNER = 'Optimization'            # motion planner ('Automaton' or 'Optimization')
 HORIZON = 3                         # planning horizon (in seconds)
 REPLAN = 0.5                        # time after which the trajectory is re-planned (in seconds)
-FREQUENCY = 50                     # control frequency (in Hertz)
+FREQUENCY = 25                     # control frequency (in Hertz)
 SENSORRANGE = 100                   # sensor range of the car (in meters)
 CARS = 100                          # number of cars in the map
 REAL_DYNAMICS = True                # use real car dynamics from the CARLA vehicle model
@@ -146,13 +147,14 @@ def main():
     pygame.init()
     display = pygame.display.set_mode((800, 600), pygame.HWSURFACE | pygame.DOUBLEBUF)
     client = carla.Client('localhost', 2000)
-    client.set_timeout(2.0)
+    client.set_timeout(5.0)
     world = client.get_world()
     client.load_world(MAP)
 
     # load parameter for the car
     param = vehicleParameter()
     param['a_max'] = 5
+    param['wheelbase'] = 2.7
 
     # load maneuver automaton
     filehandler = open('./maneuverAutomaton/maneuverAutomaton.obj', 'rb')
@@ -161,7 +163,7 @@ def main():
     # load the CommonRoad scenario
     scenario, planning_problem = CommonRoadFileReader(os.path.join('auxiliary', MAP + '.xml')).open()
 
-    # determine overlapping lanelets
+    # determine overlapping laneletstrajectories
     overlaps = overlappingLanelets(scenario)
 
     # create random planning problem
@@ -190,13 +192,14 @@ def main():
     lanelet = route.list_ids_lanelets[0]
     cnt_init = 0
     traj = {'x': [x0], 'u': [], 't': [0]}
-    time = REPLAN
+    comp_time = {'high': [], 'all': []}
+    t = REPLAN
     plt.figure(figsize=(7, 7))
     horizon = int(np.round(HORIZON/scenario.dt))
 
     if VIDEO:
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-        video = cv2.VideoWriter(os.path.join('auxiliary', 'videoCARLA.mp4'), fourcc, FREQUENCY, (800+600, 600))
+        video = cv2.VideoWriter(os.path.join('data', 'videoCARLA.mp4'), fourcc, FREQUENCY, (800+600, 600))
 
     # set weather
     w = [carla.WeatherParameters.ClearNoon, carla.WeatherParameters.CloudyNoon, carla.WeatherParameters.WetNoon,
@@ -235,6 +238,7 @@ def main():
         # main control loop
         with CarlaSyncMode(world, camera_rgb, fps=FREQUENCY) as sync_mode:
             while True:
+
                 if should_quit():
                     return
 
@@ -242,13 +246,13 @@ def main():
                 snapshot, image_rgb = sync_mode.tick(timeout=2.0)
 
                 # plan a new trajectory
-                if time < REPLAN:
+                if t < REPLAN:
 
-                    time = time + 1/FREQUENCY
+                    t = t + 1/FREQUENCY
 
                 else:
 
-                    time = 0
+                    t = 0
 
                     # get current position of the ego vehicle
                     transform = vehicle.get_transform()
@@ -257,8 +261,13 @@ def main():
 
                     x0 = np.array([transform.location.x, -transform.location.y, velocity, -np.deg2rad(transform.rotation.yaw)])
 
+                    # check if goal has been reached
+                    if (goal.location.x - x0[0])**2 + (goal.location.y + x0[1])**2 < 10**2:
+                        return
+
                     # predict the future positions of the other vehicles
                     scenario_ = deepcopy(scenario)
+                    vehicles = []
 
                     for v in world.get_actors().filter('*vehicle*'):
                         transform = v.get_transform()
@@ -280,6 +289,8 @@ def main():
                             dynamic_obstacle = DynamicObstacle(scenario.generate_object_id(), ObstacleType.CAR, shape,
                                                                state)
                             scenario_.add_objects(dynamic_obstacle)
+                            vehicles.append(Rectangle(center=state.position, orientation=state.orientation,
+                                                      width=width, length=length))
 
                     scenario_ = prediction(scenario_, horizon, x0, overlapping_lanelets=overlaps)
 
@@ -366,19 +377,21 @@ def main():
                     pickle.dump(data, filehandler)
 
                     # solve motion planning problem
-                    plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param,
-                                                                  desired_velocity='speed_limit', weight_safe_distance=10000)
+                    start_time = time.time()
+                    plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param)
+                    comp_time['high'].append(time.time() - start_time)
 
                     if PLANNER == 'Automaton':
                         x, u = lowLevelPlannerManeuverAutomaton(scenario_, planning_problem, param, plan, vel, space,
                                                                 ref_traj, MA)
                     elif PLANNER == 'Optimization':
-                        param_ = deepcopy(param)
-                        param_['a_max'] = 6
-                        x, u, controller = lowLevelPlannerOptimization(scenario_, planning_problem, param_, plan, vel,
-                                                                       space, ref_traj, feedback_control=True)
+                        x, u, controller = lowLevelPlannerOptimization(scenario_, planning_problem, param, plan, vel,
+                                                                       space, ref_traj, feedback_control=True,
+                                                                       R_diff=np.diag([0, 0.1]))
                     else:
                         raise Exception('Motion planner not supported! The available planners are "Automaton" and "Optimization".')
+
+                    comp_time['all'].append(time.time() - start_time)
 
                 # update car position and orientation
                 if REAL_DYNAMICS:
@@ -394,10 +407,13 @@ def main():
                     x_meas[0, 0] = x_meas[0, 0] - np.cos(x_meas[3, 0]) * param['b']
                     x_meas[1, 0] = x_meas[1, 0] - np.sin(x_meas[3, 0]) * param['b']
 
-                    u = controller.get_control_input(time, x_meas)
+                    u = controller.get_control_input(t, x_meas)
 
                     acc = u[0] / 6.17
                     steer = -u[1]
+
+                    if abs(velocity) < 0.1:
+                        steer = 0
 
                     if acc > 0:
                         vehicle.apply_control(carla.VehicleControl(throttle=acc, brake=0, steer=steer, manual_gear_shift=True, gear=2))
@@ -406,11 +422,11 @@ def main():
 
                     traj['u'].append(np.array([acc, steer]))
                     traj['t'].append(traj['t'][-1] + 1 / FREQUENCY)
-                    filehandler = open(os.path.join('trajectories', 'trajectory.obj'), 'wb')
+                    filehandler = open(os.path.join('data', 'trajectory.obj'), 'wb')
                     pickle.dump(traj, filehandler)
 
                 else:
-                    x0 = x[:, np.floor(time/param['time_step'])]
+                    x0 = x[:, np.floor(t/param['time_step'])]
                     pose = Transform(Location(x=x0[0], y=-x0[1], z=0.3),
                                      Rotation(pitch=0.0, yaw=-np.rad2deg(x0[3]), roll=0.0))
                     vehicle.set_transform(pose)
@@ -426,7 +442,7 @@ def main():
                     rnd = MPRenderer()
                     canvas = FigureCanvasAgg(rnd.f)
 
-                    cnt_time = int(np.floor(time/param['time_step']))
+                    cnt_time = int(np.floor(t/param['time_step']))
                     rnd.draw_params.time_begin = cnt_time
                     rnd.draw_params.time_end = horizon
                     rnd.draw_params.planning_problem_set.planning_problem.initial_state.state.draw_arrow = False
@@ -463,6 +479,22 @@ def main():
                                               center=s.position,
                                               orientation=s.orientation)
                                 r.draw(rnd, settings)
+                        if d.prediction.trajectory.state_list[-1].time_step < cnt_time:
+                            s = d.prediction.trajectory.state_list[-1]
+                            settings = ShapeParams(opacity=1, edgecolor="k", linewidth=1.0, facecolor='#1d7eea')
+                            r = Rectangle(length=d.obstacle_shape.length, width=d.obstacle_shape.width,
+                                          center=s.position, orientation=s.orientation)
+                            r.draw(rnd, settings)
+
+                    for v in vehicles:
+                        found = False
+                        for d in scenario_.dynamic_obstacles:
+                            if np.linalg.norm(d.initial_state.position - v.center) < 0.1:
+                                found = True
+                                break
+                        if not found:
+                            settings = ShapeParams(opacity=1, edgecolor="k", linewidth=1.0, facecolor='#1d7eea')
+                            v.draw(rnd, settings)
 
                     # plot planned trajectory
                     for j in range(x.shape[1] - 1, -1, -1):
@@ -512,6 +544,10 @@ def main():
         if VIDEO:
             cv2.destroyAllWindows()
             video.release()
+
+        # write computation times to file
+        filehandler = open(os.path.join('data', 'computationTime.obj'), 'wb')
+        pickle.dump(comp_time, filehandler)
 
         print('destroying actors.')
         for actor in actor_list:
