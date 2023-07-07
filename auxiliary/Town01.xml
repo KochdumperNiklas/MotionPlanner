@@ -681,7 +681,7 @@
     <trafficSignRef ref="540"/>
   </lanelet>
   <lanelet id="14">
-    <leftBound>
+    <rightBound>
       <point>
         <x>384.5878</x>
         <y>-4.0199</y>
@@ -718,8 +718,8 @@
         <x>390.38</x>
         <y>-11.2396</y>
       </point>
-    </leftBound>
-    <rightBound>
+    </rightBound>
+    <leftBound>
       <point>
         <x>384.5899</x>
         <y>-0.0199</y>
@@ -756,7 +756,7 @@
         <x>394.3795</x>
         <y>-11.2404</y>
       </point>
-    </rightBound>
+    </leftBound>
     <predecessor ref="5"/>
     <successor ref="391"/>
     <adjacentLeft ref="392" drivingDir="opposite"/>
@@ -834,7 +834,7 @@
     <trafficSignRef ref="543"/>
   </lanelet>
   <lanelet id="59">
-    <leftBound>
+    <rightBound>
       <point>
         <x>11.0283</x>
         <y>4.0199</y>
@@ -879,8 +879,8 @@
         <x>-3.9912</x>
         <y>-11.2401</y>
       </point>
-    </leftBound>
-    <rightBound>
+    </rightBound>
+    <leftBound>
       <point>
         <x>11.0296</x>
         <y>0.0199</y>
@@ -925,7 +925,7 @@
         <x>-0.0035</x>
         <y>-11.2398</y>
       </point>
-    </rightBound>
+    </leftBound>
     <predecessor ref="57"/>
     <successor ref="390"/>
     <adjacentLeft ref="389" drivingDir="opposite"/>
@@ -6981,7 +6981,7 @@
     <trafficSignRef ref="636"/>
   </lanelet>
   <lanelet id="389">
-    <leftBound>
+    <rightBound>
       <point>
         <x>3.9838</x>
         <y>-11.2397</y>
@@ -7018,8 +7018,8 @@
         <x>11.0309</x>
         <y>-3.9799</y>
       </point>
-    </leftBound>
-    <rightBound>
+    </rightBound>
+    <leftBound>
       <point>
         <x>-0.0035</x>
         <y>-11.2402</y>
@@ -7056,7 +7056,7 @@
         <x>11.0296</x>
         <y>0.0199</y>
       </point>
-    </rightBound>
+    </leftBound>
     <predecessor ref="393"/>
     <successor ref="60"/>
     <adjacentLeft ref="59" drivingDir="opposite"/>
@@ -7130,7 +7130,7 @@
     <trafficSignRef ref="639"/>
   </lanelet>
   <lanelet id="392">
-    <leftBound>
+    <rightBound>
       <point>
         <x>398.3479</x>
         <y>-11.2404</y>
@@ -7175,8 +7175,8 @@
         <x>384.5921</x>
         <y>3.9799</y>
       </point>
-    </leftBound>
-    <rightBound>
+    </rightBound>
+    <leftBound>
       <point>
         <x>394.358</x>
         <y>-11.2396</y>
@@ -7221,7 +7221,7 @@
         <x>384.5899</x>
         <y>-0.0199</y>
       </point>
-    </rightBound>
+    </leftBound>
     <predecessor ref="396"/>
     <successor ref="1"/>
     <adjacentLeft ref="14" drivingDir="opposite"/>
