@@ -1527,7 +1527,10 @@ def velocity2trajectory(vel_prof, param):
 
     for i in range(len(vel_prof)):
         ref_traj.append((x, vel_prof[i]))
-        x = x + vel_prof[i] * param['time_step']
+        if i < len(vel_prof)-1:
+            x = x + vel_prof[i] * param['time_step'] + 0.5*(vel_prof[i+1]-vel_prof[i])*param['time_step']
+        else:
+            x = x + vel_prof[i] * param['time_step']
 
     return ref_traj
 
@@ -2730,17 +2733,16 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
                 corrections.append({'index': i+1, 'upper': x[i+1], 'lower': x[i+1]})
         else:
             if abs(space[i+1].bounds[0] - x[i+1]) < 0.001:
-                x[i+1] = min(x[i+1] + 0.1, x[i+1] + 0.5*(space[i+1].bounds[2] - space[i+1].bounds[0]))
+                x[i+1] = min(x[i+1] + 0.5, x[i+1] + 0.5*(space[i+1].bounds[2] - space[i+1].bounds[0]))
                 corrections.append({'index': i+1, 'lower': x[i+1], 'upper': space[i+1].bounds[2]})
             elif abs(space[i+1].bounds[2] - x[i+1]) < 0.001:
-                x[i + 1] = max(x[i + 1] - 0.1, x[i + 1] - 0.5 * (space[i + 1].bounds[2] - space[i + 1].bounds[0]))
+                x[i + 1] = max(x[i + 1] - 0.5, x[i + 1] - 0.5 * (space[i + 1].bounds[2] - space[i + 1].bounds[0]))
                 corrections.append({'index': i+1, 'lower': space[i+1].bounds[0], 'upper': x[i+1]})
 
     # update velocity profile
     if len(corrections) > 0:
 
-        if not corrections[-1] == len(x) - 1:
-            corrections.append({'index': len(x) - 1, 'lower': space[i + 1].bounds[0], 'upper': space[i + 1].bounds[2]})
+        x_prev = deepcopy(x)
 
         # detemermine best linear velocity profile
         a_lower = -param['a_max']
@@ -2772,6 +2774,16 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
 
         for i in range(1, len(x)):
             x[i] = x[0] + v[0]*(i*dt) + 0.5*a*(i*dt)**2
+
+        if corrections[-1]['index'] < len(x):
+            ind = corrections[-1]['index']
+            t = (len(x) - ind)*dt
+            a = 2*(x_prev[-1] - x[ind] - v[ind]*t)/t**2
+            a = max(-param['a_max'], min(a, param['a_max']))
+            for i in range(ind+1, len(x)):
+                t = (i-ind)*dt
+                v[i] = v[ind] + a*t
+                x[i] = x[ind] + v[ind]*t + 0.5*a*t**2
 
         # check if driving the desired velocity profile is feasible
         if not space[-1].contains(Point(x[-1], v[-1])):
