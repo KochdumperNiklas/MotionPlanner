@@ -2162,12 +2162,18 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
 
     # update plan (= lanelet-time-assignment)
     plan = np.asarray(plan)
-    lanes = seq.lanelets
+    lanes = [plan[0]]
+
+    for i in range(1, len(plan)):
+        if plan[i] != plan[i-1]:
+            lanes.append(plan[i])
+
     dist = 0
 
+    ind = np.where(plan[:-1] != plan[1:])[0]
+    ind = [-1] + ind.tolist() + [len(plan) - 1]
+
     for i in range(len(lanes)-1):
-        ind = np.where(plan[:-1] != plan[1:])[0]
-        ind = [-1] + ind.tolist() + [len(plan) - 1]
         if lanes[i+1] in lanelets[lanes[i]].successor:
             for j in range(ind[i]+1, ind[i+2]+1):
                 if x[j] - dist < lanelets[lanes[i]].distance[-1]:
