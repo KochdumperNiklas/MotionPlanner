@@ -48,7 +48,7 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     ref_traj = velocity2trajectory(vel_prof, param)
 
     # determine best sequence of lanelets to drive on
-    seq = best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, partially_occupied, safe_dist, param)
+    seq = best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, dist_goal, partially_occupied, safe_dist, param)
 
     # refine the plan: decide on which lanelet to be on for all time steps
     plan, space = refine_plan(seq, ref_traj, lanelets, safe_dist, param)
@@ -1090,92 +1090,111 @@ def reduce_space(space, plan, lanelets, param):
 
     return space
 
-def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, partially_occupied, safe_dist, param):
+def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, dist_goal, partially_occupied, safe_dist, param):
     """determine the best sequences of lanelets to drive on that reach the goal state"""
 
     min_cost = None
     is_priority = False
 
-    # create initial nodes
-    queue = []
-    v = param['v_init']
+    # sort possible initial lanelets according to distance
+    dist = []
 
     for i in range(len(param['x0_lane'])):
+        tmp = np.inf
+        for j in range(len(dist_goal)):
+            if param['goal'][j]['lane'] == param['x0_lane'][i]:
+                tmp = -10
+            else:
+                tmp = min(tmp, dist_goal[j][param['x0_lane'][i]])
+        dist.append(tmp)
 
-        space = interval2polygon([param['x0_set'][i] - 0.01, v - 0.01], [param['x0_set'][i] + 0.01, v + 0.01])
-        x0 = {'step': 0, 'space': space, 'lanelet': param['x0_lane'][i]}
-        queue.append(Node([x0], [], [], 'none', ref_traj, change_goal, lanelets, safe_dist, param))
+    order = np.argsort(dist)
 
-    # loop until queue empty -> all possible lanelet sequences have been explored
-    while len(queue) > 0:
+    # loop over all initial nodes
+    final_node = None
 
-        # sort the queue
-        queue.sort(key=lambda i: i.cost)
+    for j in order:
 
-        # remove nodes with costs higher than the current minimum cost for reaching the goal set
-        if min_cost is not None and (not param['goal_set_priority'] or is_priority):
-            for i in range(len(queue)):
-                if queue[i].cost > min_cost:
-                    queue = queue[:i]
-                    break
-        if len(queue) == 0:
-            break
+        # create initial node
+        v = param['v_init']
+        space = interval2polygon([param['x0_set'][j] - 0.01, v - 0.01], [param['x0_set'][j] + 0.01, v + 0.01])
+        x0 = {'step': 0, 'space': space, 'lanelet': param['x0_lane'][j]}
+        queue = [Node([x0], [], [], 'none', ref_traj, change_goal, lanelets, safe_dist, param)]
 
-        # take node from queue
-        node = queue.pop()
+        # loop until queue empty -> all possible lanelet sequences have been explored
+        while len(queue) > 0:
 
-        # compute drivable area for the current lanelet
-        lanelet = lanelets[node.x0[0]['lanelet']]
+            # sort the queue
+            queue.sort(key=lambda i: i.cost)
 
-        if len(node.lanelets) == 0:
-            prev = []
-        else:
-            prev = node.drive_area[len(node.drive_area)-1]
+            # remove nodes with costs higher than the current minimum cost for reaching the goal set
+            if min_cost is not None and (not param['goal_set_priority'] or is_priority):
+                for i in range(len(queue)):
+                    if queue[i].cost > min_cost:
+                        queue = queue[:i]
+                        break
+            if len(queue) == 0:
+                break
 
-        drive_area, left, right, suc, x0 = compute_drivable_area(lanelet, node.x0, free_space, prev, node.lane_prev,
-                                                                 partially_occupied, param)
+            # take node from queue
+            node = queue.pop()
 
-        # check if goal set has been reached
-        for i in range(len(param['goal'])):
+            # compute drivable area for the current lanelet
+            lanelet = lanelets[node.x0[0]['lanelet']]
 
-            goal = param['goal'][i]
+            if len(node.lanelets) == 0:
+                prev = []
+            else:
+                prev = node.drive_area[len(node.drive_area)-1]
 
-            if goal['lane'] is None or lanelet.lanelet_id == goal['lane']:
+            drive_area, left, right, suc, x0 = compute_drivable_area(lanelet, node.x0, free_space, prev, node.lane_prev,
+                                                                     partially_occupied, param)
 
-                final_sets = []
+            # check if goal set has been reached
+            for i in range(len(param['goal'])):
 
-                for d in drive_area:
-                    if goal['time_start'] <= d['step'] <= goal['time_end'] and d['space'].intersects(goal['set']):
-                        final_sets.append({'space': d['space'].intersection(goal['set']), 'step': d['step']})
+                goal = param['goal'][i]
 
-                if len(final_sets) > 0:
-                    node_temp = expand_node(node, final_sets, drive_area, 'final',
-                                            ref_traj, change_goal, lanelets, safe_dist, param)
-                    if min_cost is None or node_temp.cost < min_cost or \
-                            (param['goal_set_priority'] and i == 0 and not is_priority):
-                        min_cost = node_temp.cost
-                        final_node = deepcopy(node_temp)
-                        if i == 0:
-                            is_priority = True
+                if goal['lane'] is None or lanelet.lanelet_id == goal['lane']:
 
-        # create child nodes
-        for entry in x0:
-            queue.append(expand_node(node, entry, drive_area, node.lane_prev,
-                                     ref_traj, change_goal, lanelets, safe_dist, param))
+                    final_sets = []
 
-        for entry in left:
-            if len(entry) > param['minimum_steps_lane_change']:
-                queue.append(expand_node(node, entry, drive_area, 'right',
+                    for d in drive_area:
+                        if goal['time_start'] <= d['step'] <= goal['time_end'] and d['space'].intersects(goal['set']):
+                            final_sets.append({'space': d['space'].intersection(goal['set']), 'step': d['step']})
+
+                    if len(final_sets) > 0:
+                        node_temp = expand_node(node, final_sets, drive_area, 'final',
+                                                ref_traj, change_goal, lanelets, safe_dist, param)
+                        if min_cost is None or node_temp.cost < min_cost or \
+                                (param['goal_set_priority'] and i == 0 and not is_priority):
+                            min_cost = node_temp.cost
+                            final_node = deepcopy(node_temp)
+                            if i == 0:
+                                is_priority = True
+
+            # create child nodes
+            for entry in x0:
+                queue.append(expand_node(node, entry, drive_area, node.lane_prev,
                                          ref_traj, change_goal, lanelets, safe_dist, param))
 
-        for entry in right:
-            if len(entry) > param['minimum_steps_lane_change']:
-                queue.append(expand_node(node, entry, drive_area, 'left',
+            for entry in left:
+                if len(entry) > param['minimum_steps_lane_change']:
+                    queue.append(expand_node(node, entry, drive_area, 'right',
+                                             ref_traj, change_goal, lanelets, safe_dist, param))
+
+            for entry in right:
+                if len(entry) > param['minimum_steps_lane_change']:
+                    queue.append(expand_node(node, entry, drive_area, 'left',
+                                             ref_traj, change_goal, lanelets, safe_dist, param))
+
+            for entry in suc:
+                queue.append(expand_node(node, entry, drive_area, 'none',
                                          ref_traj, change_goal, lanelets, safe_dist, param))
 
-        for entry in suc:
-            queue.append(expand_node(node, entry, drive_area, 'none',
-                                     ref_traj, change_goal, lanelets, safe_dist, param))
+        # abort if a solution has been found
+        if not final_node is None:
+            return final_node
 
     return final_node
 
