@@ -3003,8 +3003,9 @@ class Node:
         # determine cost from deviation to the desired reference trajectory
         diff = np.inf * np.ones(len(ref_traj))
 
-        for i in range(len(self.x0)):
-            diff[self.x0[i]['step']] = 0
+        if self.lane_prev != 'final':
+            for i in range(len(self.x0)):
+                diff[self.x0[i]['step']] = 0
 
         for i in range(len(ref_traj)):
 
@@ -3042,8 +3043,9 @@ class Node:
         # determine cost from violation of the safe distance
         viol = np.inf * np.ones(len(ref_traj))
 
-        for i in range(len(self.x0)):
-            viol[self.x0[i]['step']] = 0
+        if self.lane_prev != 'final':
+            for i in range(len(self.x0)):
+                viol[self.x0[i]['step']] = 0
 
         for i in range(len(ref_traj)):
 
