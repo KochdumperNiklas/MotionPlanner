@@ -7501,14 +7501,14 @@
   <trafficSign id="523">
     <trafficSignElement>
       <trafficSignID>274</trafficSignID>
-      <additionalValue>8.3</additionalValue>
+      <additionalValue>16.6</additionalValue>
     </trafficSignElement>
     <virtual>false</virtual>
   </trafficSign>
   <trafficSign id="524">
     <trafficSignElement>
       <trafficSignID>274</trafficSignID>
-      <additionalValue>8.3</additionalValue>
+      <additionalValue>16.6</additionalValue>
     </trafficSignElement>
     <virtual>false</virtual>
   </trafficSign>
@@ -7571,14 +7571,14 @@
   <trafficSign id="533">
     <trafficSignElement>
       <trafficSignID>274</trafficSignID>
-      <additionalValue>8.3</additionalValue>
+      <additionalValue>25</additionalValue>
     </trafficSignElement>
     <virtual>false</virtual>
   </trafficSign>
   <trafficSign id="534">
     <trafficSignElement>
       <trafficSignID>274</trafficSignID>
-      <additionalValue>8.3</additionalValue>
+      <additionalValue>25</additionalValue>
     </trafficSignElement>
     <virtual>false</virtual>
   </trafficSign>
@@ -8306,14 +8306,14 @@
   <trafficSign id="638">
     <trafficSignElement>
       <trafficSignID>274</trafficSignID>
-      <additionalValue>8.3</additionalValue>
+      <additionalValue>25</additionalValue>
     </trafficSignElement>
     <virtual>false</virtual>
   </trafficSign>
   <trafficSign id="639">
     <trafficSignElement>
       <trafficSignID>274</trafficSignID>
-      <additionalValue>8.3</additionalValue>
+      <additionalValue>25</additionalValue>
     </trafficSignElement>
     <virtual>false</virtual>
   </trafficSign>
@@ -8327,7 +8327,7 @@
   <trafficSign id="641">
     <trafficSignElement>
       <trafficSignID>274</trafficSignID>
-      <additionalValue>8.3</additionalValue>
+      <additionalValue>25</additionalValue>
     </trafficSignElement>
     <virtual>false</virtual>
   </trafficSign>
@@ -8348,7 +8348,7 @@
   <trafficSign id="644">
     <trafficSignElement>
       <trafficSignID>274</trafficSignID>
-      <additionalValue>8.3</additionalValue>
+      <additionalValue>25</additionalValue>
     </trafficSignElement>
     <virtual>false</virtual>
   </trafficSign>
