@@ -2743,43 +2743,37 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
     if len(corrections) > 0:
 
         x_prev = deepcopy(x)
-        v_prev = deepcopy(v)
 
         # detemermine best linear velocity profile
-        index = 0
+        a_lower = -param['a_max']
+        a_upper = param['a_max']
 
-        for j in range(len(corrections)):
+        for c in corrections:
+            t = c['index']*dt
+            a_upper = min(a_upper, 2*(c['upper'] - x[0] - v[0]*t)/t**2)
+            a_lower = max(a_lower, 2 * (c['lower'] - x[0] - v[0] * t) / t ** 2)
 
-            a_lower = -param['a_max']
-            a_upper = param['a_max']
+        t = np.arange(param['steps']+1)*dt
 
-            for c in corrections[j:]:
-                t = c['index']*dt
-                a_upper = min(a_upper, 2*(c['upper'] - x[index] - v[index]*t)/t**2)
-                a_lower = max(a_lower, 2 * (c['lower'] - x[index] - v[index] * t) / t ** 2)
+        if a_upper > a_lower:
 
-            t = np.arange(param['steps']+1)*dt
+            # select velocity profile closest to the original one
+            v_upper = v[0] + a_upper * t
+            v_lower = v[0] + a_lower * t
 
-            if a_upper > a_lower:
-
-                # select velocity profile closest to the original one
-                v_upper = v[index] + a_upper * t[index:]
-                v_lower = v[index] + a_lower * t[index:]
-
-                if np.mean(abs(v_lower - v_prev[index:])) > np.mean(abs(v_upper - v_prev[index:])):
-                    a = a_upper
-                else:
-                    a = a_lower
-
+            if np.mean(abs(v_lower - v)) > np.mean(abs(v_upper - v)):
+                v = v_upper
+                a = a_upper
             else:
-                a = 0.5*(a_lower + a_upper)
+                v = v_lower
+                a = a_lower
 
-            for i in range(index, corrections[j]['index']+1):
-                t = (i-index)*dt
-                v[i] = v[index] + a*t
-                x[i] = x[index] + v[index]*t + 0.5*a*t**2
+        else:
+            a = 0.5*(a_lower + a_upper)
+            v = v[0] + 0.5*a * t
 
-            index = corrections[j]['index']
+        for i in range(1, len(x)):
+            x[i] = x[0] + v[0]*(i*dt) + 0.5*a*(i*dt)**2
 
         if corrections[-1]['index'] < len(x):
             ind = corrections[-1]['index']
