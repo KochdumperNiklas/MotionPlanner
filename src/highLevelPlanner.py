@@ -750,7 +750,7 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
 
                     # check if car is already on intersection or cannot stop in front of lanelet anymore
                     t = param['v_init'] / param['a_max']
-                    dist_break = param['v_init']*t - 0.5 * param['a_max']*t**2 + 0.5 * param['length_max'] + 0.2
+                    dist_break = param['v_init']*t - 0.5 * param['a_max']*t**2 + 0.5 * param['length_max']
 
                     if l not in param['x0_lane'] and dist_init[l] > dist_break:
 
