@@ -779,6 +779,7 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                                             free_space_all[s][i][j] = free_space_all[s][i][j].difference(pgon)
                                             break
                                 free_space_all[s][i] = free_space_all[s][i][0:cnt]
+                                occupied_dist[s][i].append((pgon.bounds[0]-0.5, pgon.bounds[2]))
 
     # compute areas in which a safe distance to the surrounding traffic participants is satisfied
     safe_dist = area_safe_distance(free_space_all, occupied_dist)
@@ -2731,13 +2732,6 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
                 corrections.append({'index': i + 1, 'upper': space[i + 1].bounds[2], 'lower': x[i + 1]})
             else:
                 corrections.append({'index': i+1, 'upper': x[i+1], 'lower': x[i+1]})
-        else:
-            if abs(space[i+1].bounds[0] - x[i+1]) < 0.001:
-                x[i+1] = min(x[i+1] + 0.5, x[i+1] + 0.5*(space[i+1].bounds[2] - space[i+1].bounds[0]))
-                corrections.append({'index': i+1, 'lower': x[i+1], 'upper': space[i+1].bounds[2]})
-            elif abs(space[i+1].bounds[2] - x[i+1]) < 0.001:
-                x[i + 1] = max(x[i + 1] - 0.5, x[i + 1] - 0.5 * (space[i + 1].bounds[2] - space[i + 1].bounds[0]))
-                corrections.append({'index': i+1, 'lower': space[i+1].bounds[0], 'upper': x[i+1]})
 
     # update velocity profile
     if len(corrections) > 0:
