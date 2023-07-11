@@ -1197,7 +1197,7 @@ def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, dist_goal
         if not final_node is None:
             return final_node
 
-    return final_node
+    raise Exception("Failed to find a feasible solution!")
 
 def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_occupied, param):
     """compute the drivable area for a single lanelet"""
