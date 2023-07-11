@@ -13,7 +13,6 @@ from commonroad.geometry.shape import ShapeGroup
 from commonroad.visualization.util import collect_center_line_colors
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 
-
 def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000, weight_velocity=1,
                      weight_safe_distance=10, minimum_safe_distance=1, minimum_steps_lane_change=5,
                      desired_steps_lane_change=20, desired_acceleration=1, desired_velocity='speed_limit',
@@ -501,14 +500,18 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
     occupied_dist = dict(zip(lanelets.keys(), deepcopy(tmp)))
     partially_occupied = dict(zip(lanelets.keys(), deepcopy(tmp)))
 
-    # compute width for all lanelets
+    # compute width and lanelet segments for all lanelets
     width = []
+    segments = []
 
     for k in lanelets.keys():
         width_min, width_max = width_lanelet(lanelets[k])
+        seg = lanelet_segments(lanelets[k])
         width.append((width_min, width_max))
+        segments.append(seg)
 
     width_lanelets = dict(zip(lanelets.keys(), width))
+    segments = dict(zip(lanelets.keys(), segments))
 
     # loop over all obstacles
     for obs in obstacles:
@@ -535,7 +538,7 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                 d_max = l.distance[-1]
 
                 # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
-                dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon)
+                dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon, segments=segments[id])
                 offset = 0.5 * param['length_max'] + param['minimum_safe_distance']
 
                 # loop over all time steps
@@ -588,7 +591,7 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                         width_max = width_lanelets[id][1]
 
                         # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
-                        dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon)
+                        dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon, segments=segments[id])
                         offset = 0.5 * param['length_max'] + param['minimum_safe_distance']
                         space = (max(d_min, dist_min - offset), min(d_max, dist_max + offset))
                         occupied_space[id][o.time_step].append({'space': space, 'width': (y_min, y_max), 'obs': pgon})
@@ -829,7 +832,18 @@ def occupied_successor(lanelets, id, dist_max, occupied_space, steps, width, pgo
         if dist_max > lanelets[ind].distance[-1]:
             occupied_successor(lanelets, ind, dist_max - lanelets[ind].distance[-1], occupied_space, steps, width, pgon)
 
-def projection_lanelet_centerline(lanelet, pgon):
+def lanelet_segments(lanelet):
+    """construct polygons for all segments of the lanelet"""
+
+    segments = []
+
+    for i in range(len(lanelet.distance)-1):
+        segments.append(Polygon(np.concatenate((lanelet.right_vertices[[i], :], lanelet.right_vertices[[i + 1], :],
+                                  lanelet.left_vertices[[i + 1], :], lanelet.left_vertices[[i], :]))))
+
+    return segments
+
+def projection_lanelet_centerline(lanelet, pgon, segments=None):
     """project a polygon to the center line of the lanelet to determine the occupied space"""
 
     # intersect polygon with lanelet
@@ -852,11 +866,14 @@ def projection_lanelet_centerline(lanelet, pgon):
     y_min = np.inf
 
     # loop over all centerline segments
-    for i in range(0, len(lanelet.distance) - 1):
+    for i in range(len(lanelet.distance)-1):
 
         # check if space intersects the current lanelet segment
-        seg = Polygon(np.concatenate((lanelet.right_vertices[[i], :], lanelet.right_vertices[[i+1], :],
-                                      lanelet.left_vertices[[i+1], :], lanelet.left_vertices[[i], :])))
+        if segments is None:
+            seg = Polygon(np.concatenate((lanelet.right_vertices[[i], :], lanelet.right_vertices[[i + 1], :],
+                                    lanelet.left_vertices[[i + 1], :], lanelet.left_vertices[[i], :])))
+        else:
+            seg = segments[i]
 
         if seg.intersects(o_int):
 
