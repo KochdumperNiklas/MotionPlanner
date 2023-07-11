@@ -2747,7 +2747,7 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
             a_upper = min(a_upper, 2*(c['upper'] - x[0] - v[0]*t)/t**2)
             a_lower = max(a_lower, 2 * (c['lower'] - x[0] - v[0] * t) / t ** 2)
 
-        t = np.arange(param['steps']+1)*dt
+        t = np.arange(len(v))*dt
 
         if a_upper > a_lower:
 
