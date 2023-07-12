@@ -500,7 +500,16 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
     occupied_dist = dict(zip(lanelets.keys(), deepcopy(tmp)))
     partially_occupied = dict(zip(lanelets.keys(), deepcopy(tmp)))
 
-    # precompute lanelet properties like widht, etc.
+    # check which lanelets are reachable
+    t_final = param['steps']*param['time_step']
+    dist = param['v_init'] * t_final + 0.5*param['a_max']*t_final
+    reachable_lanes = []
+
+    for k in lanelets.keys():
+        if dist_init[k] < dist:
+            reachable_lanes.append(k)
+
+    # precompute lanelet properties like width, etc.
     lanelet_props = []
 
     for k in lanelets.keys():
@@ -526,7 +535,9 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                 intersecting_lanes = obs.initial_shape_lanelet_ids
 
             # loop over all affected lanelets
-            for id in intersecting_lanes:
+            lanes = (x for x in intersecting_lanes if x in reachable_lanes)
+
+            for id in lanes:
 
                 l = lanelets[id]
                 d_min = l.distance[0]
@@ -577,7 +588,9 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                     pgon = get_shapely_object(o.shape)
 
                     # loop over all affected lanelets
-                    for id in intersecting_lanes[o.time_step]:
+                    lanes = (x for x in intersecting_lanes[o.time_step] if x in reachable_lanes)
+
+                    for id in lanes:
 
                         l = lanelets[id]
                         d_min = l.distance[0]
