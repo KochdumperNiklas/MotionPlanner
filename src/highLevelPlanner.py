@@ -1315,7 +1315,7 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_oc
         for suc in lanelet.successor:
             if space_suc[suc] is not None:
                 if space_suc[suc].intersects(free_space[suc][i+1][0]):
-                    free = union_robust(translate(space_lanelet[-1], -lanelet.distance[-1], 0), free_space[suc][i+1][0])
+                    free = union_free_space(translate(space_lanelet[-1], -lanelet.distance[-1], 0), free_space[suc][i+1][0])
                     if free.intersects(space_suc[suc]):
                         space_suc[suc] = free.intersection(space_suc[suc])
                         successors = add_transition(successors, space_suc[suc], i + 1, suc, param)
@@ -2975,50 +2975,23 @@ def lanelet2global(lanelet, lower, upper, width=None, pred=False, suc=False, lan
 
     return pgon
 
+def union_free_space(pgon, pgon_suc):
+    """unite the free space on the current and on the successor lanelet"""
 
-def union_robust(pgon1, pgon2):
-    """robust union of two polygons removing small unwanted fragments"""
-
-    # compute union using build-in function
-    pgon = pgon1.union(pgon2)
-
-    # convert to a list of polygons in case the polygons are disconnected
-    if not isinstance(pgon, Polygon):
-        polygons = []
-        for p in list(pgon.geoms):
-            if isinstance(p, Polygon):
-                polygons.append(p)
+    if pgon.bounds[3] == pgon_suc.bounds[3]:
+        res = Polygon([[pgon.bounds[0], pgon.bounds[1]],
+                       [pgon.bounds[0], pgon.bounds[3]],
+                       [pgon_suc.bounds[2], pgon.bounds[3]],
+                       [pgon_suc.bounds[2], pgon.bounds[1]]])
     else:
-        polygons = [pgon]
+        res = Polygon([[pgon.bounds[0], pgon.bounds[1]],
+                       [pgon.bounds[0], pgon.bounds[3]],
+                       [pgon.bounds[2], pgon.bounds[3]],
+                       [pgon_suc.bounds[0], pgon_suc.bounds[3]],
+                       [pgon_suc.bounds[2], pgon_suc.bounds[3]],
+                       [pgon_suc.bounds[2], pgon_suc.bounds[1]]])
 
-    # bloat the polygon by a small cube
-    pgon_bloat = pgon
-
-    for p in polygons:
-
-        x, y = p.exterior.coords.xy
-        V = np.concatenate((np.expand_dims(x, axis=0), np.expand_dims(y, axis=0)), axis=0)
-
-        B = interval2polygon([-0.1, -0.1], [0.1, 0.1])
-
-        for i in range(V.shape[1]-1):
-            tmp1 = translate(B, V[0, i], V[1, i])
-            tmp2 = translate(B, V[0, i+1], V[1, i+1])
-            pgon_bloat = pgon_bloat.union(tmp1.union(tmp2).convex_hull)
-
-    # subtract the bloating again
-    x, y = pgon_bloat.exterior.coords.xy
-    V = np.concatenate((np.expand_dims(x, axis=0), np.expand_dims(y, axis=0)), axis=0)
-
-    B = interval2polygon([-0.11, -0.11], [0.11, 0.11])
-    pgon_diff = pgon_bloat
-
-    for i in range(V.shape[1] - 1):
-        tmp1 = translate(B, V[0, i], V[1, i])
-        tmp2 = translate(B, V[0, i + 1], V[1, i + 1])
-        pgon_diff = pgon_diff.difference(tmp1.union(tmp2).convex_hull)
-
-    return pgon_diff
+    return res
 
 def expand_node(node, x0, drive_area, lane_prev, ref_traj, change_goal, lanelets, safe_dist, param):
     """add value for the current step to a given node"""
