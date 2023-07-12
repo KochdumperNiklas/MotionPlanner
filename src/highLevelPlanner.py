@@ -500,18 +500,13 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
     occupied_dist = dict(zip(lanelets.keys(), deepcopy(tmp)))
     partially_occupied = dict(zip(lanelets.keys(), deepcopy(tmp)))
 
-    # compute width and lanelet segments for all lanelets
-    width = []
-    segments = []
+    # precompute lanelet properties like widht, etc.
+    lanelet_props = []
 
     for k in lanelets.keys():
-        width_min, width_max = width_lanelet(lanelets[k])
-        seg = lanelet_segments(lanelets[k])
-        width.append((width_min, width_max))
-        segments.append(seg)
+        lanelet_props.append(lanelet_properties(lanelets[k]))
 
-    width_lanelets = dict(zip(lanelets.keys(), width))
-    segments = dict(zip(lanelets.keys(), segments))
+    lanelet_props = dict(zip(lanelets.keys(), lanelet_props))
 
     # loop over all obstacles
     for obs in obstacles:
@@ -538,7 +533,7 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                 d_max = l.distance[-1]
 
                 # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
-                dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon, segments=segments[id])
+                dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon, properties=lanelet_props[id])
                 offset = 0.5 * param['length_max'] + param['minimum_safe_distance']
 
                 # loop over all time steps
@@ -587,11 +582,12 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
                         l = lanelets[id]
                         d_min = l.distance[0]
                         d_max = l.distance[-1]
-                        width_min = width_lanelets[id][0]
-                        width_max = width_lanelets[id][1]
+                        width_min = lanelet_props[id]['width_min']
+                        width_max = lanelet_props[id]['width_max']
 
                         # project occupancy set onto the lanelet center line to obtain occupied longitudinal space
-                        dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon, segments=segments[id])
+                        dist_min, dist_max, y_min, y_max = projection_lanelet_centerline(l, pgon,
+                                                                                         properties=lanelet_props[id])
                         offset = 0.5 * param['length_max'] + param['minimum_safe_distance']
                         space = (max(d_min, dist_min - offset), min(d_max, dist_max + offset))
                         occupied_space[id][o.time_step].append({'space': space, 'width': (y_min, y_max), 'obs': pgon})
@@ -638,8 +634,8 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
             v_max = speed_limit[id]
 
         # get width of the lanelet
-        width_min = width_lanelets[id][0]
-        width_max = width_lanelets[id][1]
+        width_min = lanelet_props[id]['width_min']
+        width_max = lanelet_props[id]['width_max']
 
         # loop over all time steps
         for j in range(len(occupied_space[id])):
@@ -832,26 +828,56 @@ def occupied_successor(lanelets, id, dist_max, occupied_space, steps, width, pgo
         if dist_max > lanelets[ind].distance[-1]:
             occupied_successor(lanelets, ind, dist_max - lanelets[ind].distance[-1], occupied_space, steps, width, pgon)
 
-def lanelet_segments(lanelet):
-    """construct polygons for all segments of the lanelet"""
+def lanelet_properties(lanelet):
+    """precompute additional properties for the lanelet"""
 
+    data = {}
+
+    # construct lanelet polygon
+    if lanelet.polygon.shapely_object.is_valid:
+        data['polygon'] = lanelet.polygon.shapely_object
+    else:
+        data['polygon'] = lanelet.polygon.shapely_object.buffer(0)
+
+    # construct polygons for the lanelet segments
     segments = []
 
-    for i in range(len(lanelet.distance)-1):
+    for i in range(len(lanelet.distance) - 1):
         segments.append(Polygon(np.concatenate((lanelet.right_vertices[[i], :], lanelet.right_vertices[[i + 1], :],
-                                  lanelet.left_vertices[[i + 1], :], lanelet.left_vertices[[i], :]))))
+                                                lanelet.left_vertices[[i + 1], :], lanelet.left_vertices[[i], :]))))
 
-    return segments
+    data['segments'] = segments
 
-def projection_lanelet_centerline(lanelet, pgon, segments=None):
+    # compute directions for curvilinear coordinate system
+    directions = []
+    orthogonal = []
+
+    for i in range(len(lanelet.distance)-1):
+        diff = lanelet.center_vertices[i + 1, :] - lanelet.center_vertices[i, :]
+        diff = np.expand_dims(diff / np.linalg.norm(diff), axis=0)
+        directions.append(diff)
+        orthogonal.append(np.array([[-diff[0, 1], diff[0, 0]]]))
+
+    data['directions'] = directions
+    data['orthogonal'] = orthogonal
+
+    # compute width of the lanelet
+    width_min, width_max = width_lanelet(lanelet)
+
+    data['width_min'] = width_min
+    data['width_max'] = width_max
+
+    return data
+
+def projection_lanelet_centerline(lanelet, pgon, properties=None):
     """project a polygon to the center line of the lanelet to determine the occupied space"""
 
+    # get lanelet properties
+    if properties is None:
+        properties = lanelet_properties(lanelet)
+
     # intersect polygon with lanelet
-    if lanelet.polygon.shapely_object.is_valid:
-        o_int = lanelet.polygon.shapely_object.intersection(pgon)
-    else:
-        lane = lanelet.polygon.shapely_object.buffer(0)
-        o_int = lane.intersection(pgon)
+    o_int = properties['polygon'].intersection(pgon)
 
     if not isinstance(o_int, Polygon):
         o_int = o_int.convex_hull
@@ -869,27 +895,19 @@ def projection_lanelet_centerline(lanelet, pgon, segments=None):
     for i in range(len(lanelet.distance)-1):
 
         # check if space intersects the current lanelet segment
-        if segments is None:
-            seg = Polygon(np.concatenate((lanelet.right_vertices[[i], :], lanelet.right_vertices[[i + 1], :],
-                                    lanelet.left_vertices[[i + 1], :], lanelet.left_vertices[[i], :])))
-        else:
-            seg = segments[i]
+        seg = properties['segments'][i]
 
         if seg.intersects(o_int):
 
-            # compute normalized vector representing the direction of the current segment
-            diff = lanelet.center_vertices[i + 1, :] - lanelet.center_vertices[i, :]
-            diff = np.expand_dims(diff / np.linalg.norm(diff), axis=0)
-
             # project the vertices of the polygon onto the centerline
-            V_ = diff @ (V - np.transpose(lanelet.center_vertices[[i], :]))
+            V_ = properties['directions'][i] @ (V - np.transpose(lanelet.center_vertices[[i], :]))
 
             # update ranges for the projection
             dist_max = max(dist_max, max(V_[0]) + lanelet.distance[i])
             dist_min = min(dist_min, min(V_[0]) + lanelet.distance[i])
 
             # compute width of the lanelet that is occupied
-            V_ = np.array([[-diff[0, 1], diff[0, 0]]]) @ (V - np.transpose(lanelet.center_vertices[[i], :]))
+            V_ = properties['orthogonal'][i] @ (V - np.transpose(lanelet.center_vertices[[i], :]))
 
             y_max = max(y_max, max(V_[0]))
             y_min = min(y_min, min(V_[0]))
