@@ -61,7 +61,7 @@ warnings.filterwarnings("ignore")
 MAP = 'Town01'                      # CARLA map
 PLANNER = 'Optimization'            # motion planner ('Automaton' or 'Optimization')
 HORIZON = 3                         # planning horizon (in seconds)
-REPLAN = 0.5                        # time after which the trajectory is re-planned (in seconds)
+REPLAN = 0.3                        # time after which the trajectory is re-planned (in seconds)
 FREQUENCY = 25                     # control frequency (in Hertz)
 SENSORRANGE = 100                   # sensor range of the car (in meters)
 CARS = 100                          # number of cars in the map
@@ -153,7 +153,7 @@ def main():
 
     # load parameter for the car
     param = vehicleParameter()
-    param['a_max'] = 5
+    param['a_max'] = 6
     param['wheelbase'] = 2.7
 
     # load maneuver automaton
@@ -298,8 +298,8 @@ def main():
                     points_all = []
                     for traffic_light in world.get_actors().filter('*traffic_light*'):
                         loc = traffic_light.get_location()
-                        if str(traffic_light.get_state()) == 'Red' and (loc.x - x0[0])**2 + \
-                                (-loc.y - x0[1])**2 < SENSORRANGE**2:
+                        if str(traffic_light.get_state()) == 'Red' or str(traffic_light.get_state()) == 'Yellow' \
+                                and (loc.x - x0[0])**2 + (-loc.y - x0[1])**2 < SENSORRANGE**2:
                             points = []
                             for wp in traffic_light.get_affected_lane_waypoints():
                                 points.append(np.array([wp.transform.location.x, -wp.transform.location.y]))
@@ -378,7 +378,11 @@ def main():
 
                     # solve motion planning problem
                     start_time = time.time()
-                    plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param)
+                    try:
+                        plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param)
+                    except Exception as e:
+                        print(e)
+                        return
                     comp_time['high'].append(time.time() - start_time)
 
                     if PLANNER == 'Automaton':
@@ -414,6 +418,8 @@ def main():
 
                     if abs(velocity) < 0.1:
                         steer = 0
+                        if all(ref_traj[2, :] < 0.1) and acc > 0:
+                            acc = 0
 
                     if acc > 0:
                         vehicle.apply_control(carla.VehicleControl(throttle=acc, brake=0, steer=steer, manual_gear_shift=True, gear=2))
@@ -422,8 +428,8 @@ def main():
 
                     traj['u'].append(np.array([acc, steer]))
                     traj['t'].append(traj['t'][-1] + 1 / FREQUENCY)
-                    filehandler = open(os.path.join('data', 'trajectory.obj'), 'wb')
-                    pickle.dump(traj, filehandler)
+                    #filehandler = open(os.path.join('data', 'trajectory.obj'), 'wb')
+                    #pickle.dump(traj, filehandler)
 
                 else:
                     x0 = x[:, np.floor(t/param['time_step'])]
@@ -548,6 +554,10 @@ def main():
         # write computation times to file
         filehandler = open(os.path.join('data', 'computationTime.obj'), 'wb')
         pickle.dump(comp_time, filehandler)
+
+        # write trajectory to file
+        filehandler = open(os.path.join('data', 'trajectory.obj'), 'wb')
+        pickle.dump(traj, filehandler)
 
         print('destroying actors.')
         for actor in actor_list:
