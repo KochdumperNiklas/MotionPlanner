@@ -2257,7 +2257,7 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
             partial = partially_occupied[lanes[j]][i]
 
             if d >= lanelet.distance[-1] - 1e-5:
-                if j < len(lanes) - 1 and lanes[j + 1] in lanelet.successor and plan[i] != plan[i]-1:
+                if j < len(lanes) - 1 and lanes[j + 1] in lanelet.successor and plan[i] != lanes[j]:
                     dist = dist + lanelet.distance[-1]
                     step = i
                     break
