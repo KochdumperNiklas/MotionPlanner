@@ -2245,6 +2245,7 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
     orthogonal = [deepcopy(tmp) for i in range(len(lanes))]
     center_orientation = [deepcopy(tmp) for i in range(len(lanes))]
     shifts = []
+    nonempty = []
 
     for j in range(len(lanes)):
 
@@ -2263,6 +2264,8 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
 
             for k in range(1, len(lanelet.distance)):
                 if d <= lanelet.distance[k] + 1e-10:
+                    if len(nonempty) == 0 or nonempty[-1] != j:
+                        nonempty.append(j)
                     p1 = lanelet.center_vertices[k-1, :]
                     p2 = lanelet.center_vertices[k, :]
                     p = p1 + (p2 - p1) * (d - lanelet.distance[k-1])/(lanelet.distance[k] - lanelet.distance[k-1])
@@ -2288,12 +2291,12 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
     cnt = 0
 
     for i in range(0, len(plan)):
-        if len(center_traj[cnt][i]) == 0:
-            ref_traj[:, i] = center_traj[cnt+1][i]
-            orientation[i] = center_orientation[cnt+1][i]
+        if len(center_traj[nonempty[cnt]][i]) == 0:
+            ref_traj[:, i] = center_traj[nonempty[cnt+1]][i]
+            orientation[i] = center_orientation[nonempty[cnt+1]][i]
         else:
-            ref_traj[:, i] = center_traj[cnt][i]
-            orientation[i] = center_orientation[cnt][i]
+            ref_traj[:, i] = center_traj[nonempty[cnt]][i]
+            orientation[i] = center_orientation[nonempty[cnt]][i]
         if i < len(plan)-1 and plan[i] != plan[i+1]:
             cnt = cnt + 1
 
