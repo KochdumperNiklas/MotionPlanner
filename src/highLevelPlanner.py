@@ -1139,13 +1139,32 @@ def reduce_space(space, plan, lanelets, param):
 
     return space
 
-def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, dist_goal, partially_occupied, safe_dist, param):
-    """determine the best sequences of lanelets to drive on that reach the goal state"""
+def lanelet_orientation(lanelet, x0, reference_orientation):
+    """compute the orientation of the lanelet at the given point"""
 
-    min_cost = None
-    is_priority = False
+    # get lanelet segment that corresponds to the point
+    for i in range(len(lanelet.distance)):
+        if x0 > lanelet.distance[i]:
+            diff = lanelet.center_vertices[i+1, :] - lanelet.center_vertices[i, :]
+        elif i == len(lanelet.distance)-1:
+            diff = lanelet.center_vertices[-1, :] - lanelet.center_vertices[-2, :]
 
-    # sort possible initial lanelets according to distance
+    # compute orientation
+    o = np.arctan2(diff[1], diff[0])
+
+    # consider 2*pi periodicallity for the orientation
+    tmp = o - reference_orientation
+    o = reference_orientation + np.mod(tmp + np.pi, 2 * np.pi) - np.pi
+
+    return o
+
+def order_initial_sets(lanelets, dist_goal, param):
+    """compute the best order for exploring the potential initial sets"""
+
+    if len(param['x0_lane']) == 1:
+        return [0]
+
+    # sort possible initial lanelets according to a heursitic based on distance to goal set and initial orientation
     dist = []
 
     for i in range(len(param['x0_lane'])):
@@ -1155,9 +1174,21 @@ def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, dist_goal
                 tmp = -10
             else:
                 tmp = min(tmp, dist_goal[j][param['x0_lane'][i]])
-        dist.append(tmp)
+            o = lanelet_orientation(lanelets[param['x0_lane'][i]], param['x0_set'][i], param['orientation'])
+        dist.append(tmp + 10 * abs(o - param['orientation']))
 
     order = np.argsort(dist)
+
+    return order
+
+def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, dist_goal, partially_occupied, safe_dist, param):
+    """determine the best sequences of lanelets to drive on that reach the goal state"""
+
+    min_cost = None
+    is_priority = False
+
+    # sort possible initial lanelets
+    order = order_initial_sets(lanelets, dist_goal, param)
 
     # loop over all initial nodes
     final_node = None
