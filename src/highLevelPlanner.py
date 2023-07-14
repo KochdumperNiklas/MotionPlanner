@@ -427,16 +427,19 @@ def velocity_profile(dist, speed_limit, param):
     for i in range(len(param['x0_lane'])):
         for j in range(len(param['goal'])):
 
-            goal = param['goal'][j]
+            if dist[j][param['x0_lane'][i]] < np.inf:
 
-            # compute velocity profile
-            vel_ = velocity_profile_single(dist[j], vel_des, i, goal, param)
+                # compute velocity profile
+                vel_ = velocity_profile_single(dist[j], vel_des, i, param['goal'][j], param)
 
-            # select best velocity profile (= minimum distance to desired velocity)
-            val_ = abs(vel_[-1] - vel_des)
-            if val_ < val:
-                vel = deepcopy(vel_)
-                val = val_
+                # select best velocity profile (= minimum distance to desired velocity)
+                val_ = abs(vel_[-1] - vel_des)
+                if val_ < val:
+                    vel = deepcopy(vel_)
+                    val = val_
+
+    if val == np.inf:
+        raise Exception('Goal set is not reachable!')
 
     return vel
 
