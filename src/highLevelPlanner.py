@@ -505,7 +505,7 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
 
     # check which lanelets are reachable
     t_final = param['steps']*param['time_step']
-    dist = param['v_init'] * t_final + 0.5*param['a_max']*t_final
+    dist = param['v_init'] * t_final + 0.5*param['a_max']*t_final**2
     reachable_lanes = []
 
     for k in lanelets.keys():
