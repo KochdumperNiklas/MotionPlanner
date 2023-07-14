@@ -1147,10 +1147,10 @@ def lanelet_orientation(lanelet, x0, reference_orientation):
 
     # get lanelet segment that corresponds to the point
     for i in range(len(lanelet.distance)):
-        if x0 > lanelet.distance[i]:
-            diff = lanelet.center_vertices[i+1, :] - lanelet.center_vertices[i, :]
-        elif i == len(lanelet.distance)-1:
+        if i == len(lanelet.distance)-1:
             diff = lanelet.center_vertices[-1, :] - lanelet.center_vertices[-2, :]
+        elif x0 > lanelet.distance[i]:
+            diff = lanelet.center_vertices[i+1, :] - lanelet.center_vertices[i, :]
 
     # compute orientation
     o = np.arctan2(diff[1], diff[0])
