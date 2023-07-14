@@ -2626,7 +2626,7 @@ def orientation_reference_trajectory(ref_traj, default, param):
 
     for i in range(1, ref_traj.shape[1]):
         diff = ref_traj[:, i] - ref_traj[:, i - 1]
-        if all(diff == 0):
+        if np.linalg.norm(diff)/param['time_step'] < 0.01:
             orientation[i] = default[i]
         else:
             orientation[i] = np.arctan2(diff[1], diff[0])
