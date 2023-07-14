@@ -2452,7 +2452,8 @@ def correction_partially_occupied(center_traj, orthogonal, lanes, plan, lanelets
             while cnt > 0 and lanes[cnt - 1] in lanelets[lanes[cnt]].predecessor:
                 cnt = cnt - 1
                 ind = [i for i in range(len(plan)) if len(center_traj[cnt][i]) > 0]
-                min_index = ind[0]
+                if len(ind) > 0:
+                    min_index = ind[0]
             min_index = max(min_index, s['ind'][0] - interp_start)
 
             # interpolation before the shifted area
@@ -2474,7 +2475,8 @@ def correction_partially_occupied(center_traj, orthogonal, lanes, plan, lanelets
             while cnt + 1 < len(lanes) and lanes[cnt+1] in lanelets[lanes[cnt]].successor:
                 cnt = cnt + 1
                 ind = [i for i in range(len(plan)) if len(center_traj[cnt][i]) > 0]
-                max_index = ind[-1]
+                if len(ind) > 0:
+                    max_index = ind[-1]
             max_index = min(max_index, s['ind'][-1] + interp_end)
 
             # interpolation after the shifted area
