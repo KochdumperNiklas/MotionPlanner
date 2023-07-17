@@ -911,8 +911,13 @@ def projection_lanelet_centerline(lanelet, pgon, properties=None):
 
     if not isinstance(o_int, Polygon):
         o_int = o_int.convex_hull
+        if isinstance(o_int, Polygon):
+            vx, vy = o_int.exterior.coords.xy
+        else:
+            vx, vy = o_int.coords.xy
+    else:
+        vx, vy = o_int.exterior.coords.xy
 
-    vx, vy = o_int.exterior.coords.xy
     V = np.stack((vx, vy))
 
     # initialize minimum and maximum range of the projection
