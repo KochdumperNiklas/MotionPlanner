@@ -1531,9 +1531,14 @@ def minkowski_sum_polygon_line(pgon, line):
 
     # construct the resuling set (potentially a multi-polygon)
     if len(res) == 1:
-        return res[0]
+        res = res[0]
     else:
-        return MultiPolygon(res)
+        res = MultiPolygon(res)
+
+    if not res.is_valid:
+        return res.buffer(0)
+    else:
+        return res
 
 def add_transition(transitions, space, time_step, lanelet, param):
     """add a new transition to the list of possible transitions"""
