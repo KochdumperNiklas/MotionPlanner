@@ -2508,14 +2508,15 @@ def correction_partially_occupied(center_traj, orthogonal, lanes, plan, lanelets
             min_index = max(min_index, s['ind'][0] - interp_start)
 
             # interpolation before the shifted area
-            cnt = s['lane']
-            for i in range(s['ind'][0]-1, min_index-1, -1):
-                while len(center_traj[cnt][i]) == 0 and cnt > 0:
-                    cnt = cnt - 1
-                d = orthogonal[cnt][i]
-                p = center_traj[cnt][i] + d * s['w']
-                w = 1 / (1 + np.exp(-5 * (2 * ((i - min_index) / (s['ind'][0] - min_index)) - 1)))
-                center_traj[cnt][i] = w * p + (1-w) * center_traj[cnt][i]
+            if s['ind'][0] - min_index > 0:
+                cnt = s['lane']
+                for i in range(s['ind'][0]-1, min_index-1, -1):
+                    while len(center_traj[cnt][i]) == 0 and cnt > 0:
+                        cnt = cnt - 1
+                    d = orthogonal[cnt][i]
+                    p = center_traj[cnt][i] + d * s['w']
+                    w = 1 / (1 + np.exp(-5 * (2 * ((i - min_index) / (s['ind'][0] - min_index)) - 1)))
+                    center_traj[cnt][i] = w * p + (1-w) * center_traj[cnt][i]
 
         # interpolation after the shifted area
         if s['end']:
@@ -2531,14 +2532,15 @@ def correction_partially_occupied(center_traj, orthogonal, lanes, plan, lanelets
             max_index = min(max_index, s['ind'][-1] + interp_end)
 
             # interpolation after the shifted area
-            cnt = s['lane']
-            for i in range(s['ind'][-1] + 1, max_index+1):
-                while len(center_traj[cnt][i]) == 0 and cnt < len(center_traj)-1:
-                    cnt = cnt + 1
-                d = orthogonal[cnt][i]
-                p = center_traj[cnt][i] + d * s['w']
-                w = 1 / (1 + np.exp(-5 * (2 * ((i - s['ind'][-1] - 1) / (max_index - s['ind'][-1] - 1)) - 1)))
-                center_traj[cnt][i] = (1 - w) * p + w * center_traj[cnt][i]
+            if max_index - s['ind'][-1] - 1 > 0:
+                cnt = s['lane']
+                for i in range(s['ind'][-1] + 1, max_index+1):
+                    while len(center_traj[cnt][i]) == 0 and cnt < len(center_traj)-1:
+                        cnt = cnt + 1
+                    d = orthogonal[cnt][i]
+                    p = center_traj[cnt][i] + d * s['w']
+                    w = 1 / (1 + np.exp(-5 * (2 * ((i - s['ind'][-1] - 1) / (max_index - s['ind'][-1] - 1)) - 1)))
+                    center_traj[cnt][i] = (1 - w) * p + w * center_traj[cnt][i]
 
     return center_traj
 
