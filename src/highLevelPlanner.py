@@ -2617,7 +2617,7 @@ def correct_orientation(ref_traj, lanelets, plan, lanes, lane_changes, param):
                 cnt = 1
                 if dphi < 1e-3:
                     if first:
-                        ref_traj[0:2, i] = correct_position(lanelets[plan[i]], ref_traj[:, i], param)
+                        ref_traj[0:2, i] = correct_position(pgon, car, ref_traj[:, i])
                         x = ref_traj[0, i]
                         y = ref_traj[1, i]
                         first = False
@@ -2756,22 +2756,29 @@ def correct_centerline(traj, lanelet, param):
 
     return traj
 
-def correct_position(lanelet, x, param):
+def correct_position(pgon, car, x):
     """correct the position of the reference trajectory so that the car does not intersect the lanelet boundaries"""
 
-    car = interval2polygon([-param['length'] / 2, -100], [param['length'] / 2, 100])
-
-    left_bound = LineString(lanelet.left_vertices)
-    right_bound = LineString(lanelet.right_vertices)
-
     phi = x[3]
-    pgon = affine_transform(car, [np.cos(phi), -np.sin(phi), np.sin(phi), np.cos(phi), x[0], x[1]])
-    int_left = translate(pgon.intersection(left_bound), -x[0], -x[1])
-    int_right = translate(pgon.intersection(right_bound), -x[0], -x[1])
-    ub = min(-np.sin(phi) * np.asarray(int_left.coords.xy[0]) + np.cos(phi) * np.asarray(int_left.coords.xy[1]))
-    lb = max(-np.sin(phi) * np.asarray(int_right.coords.xy[0]) + np.cos(phi) * np.asarray(int_right.coords.xy[1]))
+    pgon_car = affine_transform(car, [np.cos(phi), -np.sin(phi), np.sin(phi), np.cos(phi), x[0], x[1]])
 
-    return x[0:2] + np.array([-np.sin(phi), np.cos(phi)]) * 0.5 * (lb + ub)
+    pgon_road = interval2polygon((pgon.bounds[0]-100, pgon.bounds[1]-100), (pgon.bounds[2]+100, pgon.bounds[3]+100))
+    pgon_road = pgon_road.difference(pgon)
+
+    pgon_int = pgon_car.intersection(pgon_road)
+    pgon_int = affine_transform(pgon_int, [np.cos(phi), np.sin(phi), -np.sin(phi), np.cos(phi), 0, 0])
+
+    diff = pgon_int.bounds[3] - pgon_int.bounds[1]
+    x1 = x[0:2] + np.array([np.sin(phi), -np.cos(phi)]) * (diff + 0.01)
+    x2 = x[0:2] - np.array([np.sin(phi), -np.cos(phi)]) * (diff + 0.01)
+
+    pgon1 = affine_transform(car, [np.cos(phi), -np.sin(phi), np.sin(phi), np.cos(phi), x1[0], x1[1]])
+    pgon2 = affine_transform(car, [np.cos(phi), -np.sin(phi), np.sin(phi), np.cos(phi), x2[0], x2[1]])
+
+    if pgon1.intersection(pgon).area > pgon2.intersection(pgon).area:
+        return x1
+    else:
+        return x2
 
 def trajectory_position_velocity(space, plan, vel_prof, lanelets, safe_dist, param):
     """compute the desired space-velocity trajectory"""
