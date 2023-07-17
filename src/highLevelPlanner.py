@@ -2261,7 +2261,7 @@ def reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist
             lanes.append(plan[i])
 
     dist = 0
-    dist_plan = deepcopy(plan)
+    dist_plan = np.zeros((len(plan), ))
 
     ind = np.where(plan[:-1] != plan[1:])[0]
     ind = [-1] + ind.tolist() + [len(plan) - 1]
