@@ -14,7 +14,7 @@ def collisionChecker(scenario, traj, param):
 
         # get polygon representing the car
         r = Rectangle(length=param['length'], width=param['width'], center=np.array([traj[0, i], traj[1, i]]),
-                      orientation=traj[3, i])
+                      orientation=np.mod(traj[3, i], 2*np.pi))
         car = r.shapely_object
 
         # check for a collision with the road boundary
