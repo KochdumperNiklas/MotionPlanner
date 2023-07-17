@@ -511,6 +511,9 @@ def free_space_lanelet(lanelets, scenario, speed_limit, dist_init, param):
     for k in lanelets.keys():
         if dist_init[k] < dist:
             reachable_lanes.append(k)
+            if dist_init[k] < 0 and -dist_init[k] < param['length_max'] + param['minimum_safe_distance']:
+                d = param['length_max'] + param['minimum_safe_distance'] + dist_init[k]
+                reachable_lanes = reachable_lanes + relevant_predecessors(lanelets, k, d)
 
     # precompute lanelet properties like width, etc.
     lanelet_props = []
@@ -843,6 +846,17 @@ def occupied_successor(lanelets, id, dist_max, occupied_space, steps, width, pgo
 
         if dist_max > lanelets[ind].distance[-1]:
             occupied_successor(lanelets, ind, dist_max - lanelets[ind].distance[-1], occupied_space, steps, width, pgon)
+
+def relevant_predecessors(lanelets, id, dist):
+    """compute a list of relevant predecessor lanelets the cars on which could potentially influence the current lane"""
+
+    lanes = lanelets[id].predecessor
+
+    for s in lanelets[id].predecessor:
+        if lanelets[s].distance[-1] < dist:
+            lanes = lanes + relevant_predecessors(lanelets, s, dist - lanelets[s].distance[-1])
+
+    return lanes
 
 def lanelet_properties(lanelet):
     """precompute additional properties for the lanelet"""
