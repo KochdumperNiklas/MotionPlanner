@@ -1685,7 +1685,13 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
 
         if i == len(seq.lanelets) - 1 and time_step - 1 == seq.drive_area[i][0]['step'] - 1:
             time_step = time_step + 1
-            space.append(space[-1])
+            space_first = space[-1]
+            first_set = True
+
+        # make sure that also lanelets with a single time step enter the loop
+        if not first_set and time_step - 1 == seq.drive_area[i][0]['step'] - 1:
+            time_step = time_step + 1
+            space_first = space[time_step-1]
             first_set = True
 
         # initialize auxiliary variables
@@ -1707,7 +1713,7 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
 
             # propagate set one time step backward in time
             if first_set:
-                space[j] = space[j+1]
+                space[j] = space_first
             else:
                 space[j] = reach_set_backward(space[j+1], param)
             space_prev = space[j]
