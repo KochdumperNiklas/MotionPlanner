@@ -1244,8 +1244,8 @@ def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, dist_goal
             else:
                 prev = node.drive_area[len(node.drive_area)-1]
 
-            drive_area, left, right, suc, x0 = compute_drivable_area(lanelet, node.x0, free_space, prev, node.lane_prev,
-                                                                     partially_occupied, param)
+            drive_area, left, right, suc, x0 = compute_drivable_area(lanelet, lanelets, node.x0, free_space, prev,
+                                                                     node.lane_prev, partially_occupied, param)
 
             # check if goal set has been reached
             for i in range(len(param['goal'])):
@@ -1295,7 +1295,7 @@ def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, dist_goal
 
     raise Exception("Failed to find a feasible solution!")
 
-def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_occupied, param):
+def compute_drivable_area(lanelet, lanelets, x0, free_space, prev, lane_prev, partially_occupied, param):
     """compute the drivable area for a single lanelet"""
 
     # initialization
@@ -1374,7 +1374,8 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_oc
             break
 
         # check if it is possible to make a lane change to the left
-        if not lanelet.adj_left is None and lanelet.adj_left_same_direction:
+        if not lanelet.adj_left is None and lanelet.adj_left_same_direction and \
+                abs(lanelet.distance[-1] - lanelets[lanelet.adj_left].distance[-1]) < param['minimum_safe_distance']:
 
             for space_left in free_space[lanelet.adj_left][i+1]:
                 if space.intersects(space_left) and not(lane_prev == 'left' and cnt_prev < len(prev) and
@@ -1387,7 +1388,8 @@ def compute_drivable_area(lanelet, x0, free_space, prev, lane_prev, partially_oc
                         left = add_transition(left, space_, i+1, lanelet.adj_left, param)
 
         # check if it is possible to make a lane change to the right
-        if not lanelet.adj_right is None and lanelet.adj_right_same_direction:
+        if not lanelet.adj_right is None and lanelet.adj_right_same_direction and \
+                abs(lanelet.distance[-1] - lanelets[lanelet.adj_right].distance[-1]) < param['minimum_safe_distance']:
 
             for space_right in free_space[lanelet.adj_right][i + 1]:
                 if space.intersects(space_right) and not(lane_prev == 'right' and cnt_prev < len(prev) and
