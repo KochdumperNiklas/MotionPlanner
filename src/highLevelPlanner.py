@@ -65,7 +65,7 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     vel = [(s.bounds[1], s.bounds[3]) for s in space]
 
     # compute a desired reference trajectory
-    ref_traj, plan = reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param, lanelets, partially_occupied)
+    ref_traj, plan = reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist, param, lanelets, partially_occupied)
 
     # resolve issue with spaces consisting of multiple distinct polygons
     space_glob = remove_multi_polyogns(space_glob, ref_traj)
@@ -2245,7 +2245,7 @@ def increase_free_space(space, param):
 
     return space
 
-def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param, lanelets, partially_occupied):
+def reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist, param, lanelets, partially_occupied):
     """compute a desired reference trajectory"""
 
     # compute suitable velocity profile
@@ -2261,6 +2261,7 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
             lanes.append(plan[i])
 
     dist = 0
+    dist_plan = deepcopy(plan)
 
     ind = np.where(plan[:-1] != plan[1:])[0]
     ind = [-1] + ind.tolist() + [len(plan) - 1]
@@ -2270,8 +2271,10 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
             for j in range(ind[i]+1, ind[i+2]+1):
                 if x[j] - dist <= lanelets[lanes[i]].distance[-1]:
                     plan[j] = lanes[i]
+                    dist_plan[j] = dist
                 else:
                     plan[j] = lanes[i+1]
+                    dist_plan[j] = dist
             dist = dist + lanelets[lanes[i]].distance[-1]
 
     # determine indices for all lane changes
@@ -2352,6 +2355,38 @@ def reference_trajectory(plan, seq, space, vel_prof, time_lane, safe_dist, param
             # compute start and end time step for the lane change
             ind_start = max(time_lane[i][0]+1, ind[i] - np.floor(param['desired_steps_lane_change']/2)).astype(int)
             ind_end = min(time_lane[i][-1], ind[i] + np.floor(param['desired_steps_lane_change']/2)).astype(int)
+
+            for j in range(ind[i], ind_start-1, -1):
+                found1 = False
+                found2 = False
+                for f in free_space[plan[ind[i]]][j]:
+                    if f.bounds[0] <= x[j] - dist_plan[j] <= f.bounds[2]:
+                        found1 = True
+                        break
+                for f in free_space[plan[ind[i]+1]][j]:
+                    if f.bounds[0] <= x[j] - dist_plan[j] <= f.bounds[2]:
+                        found2 = True
+                        break
+                if found1 and found2:
+                    ind_start = j
+                else:
+                    break
+
+            for j in range(ind[i], ind_end+1):
+                found1 = False
+                found2 = False
+                for f in free_space[plan[ind[i]]][j]:
+                    if f.bounds[0] <= x[j] - dist_plan[j] <= f.bounds[2]:
+                        found1 = True
+                        break
+                for f in free_space[plan[ind[i]+1]][j]:
+                    if f.bounds[0] <= x[j] - dist_plan[j] <= f.bounds[2]:
+                        found2 = True
+                        break
+                if found1 and found2:
+                    ind_end = j
+                else:
+                    break
 
             lane_changes.append({'ind': np.arange(ind_start, ind_end+1), 'lanes': [plan[ind[i]], plan[ind[i]+1]]})
 
