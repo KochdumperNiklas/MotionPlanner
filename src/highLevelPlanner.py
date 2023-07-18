@@ -2851,13 +2851,13 @@ def trajectory_position_velocity(space, plan, vel_prof, lanelets, safe_dist, par
 
             if not pgon.is_empty:
                 p = nearest_points(pgon, Point(x[i+1], v[i+1]))[0]
-            elif space[i+1].exterior.distance(Point(p1[0], p1[1])) < 1e-10:
+            elif distance_border(space[i+1], Point(p1[0], p1[1])) < 1e-10:
                 p = Point(p1[0], p1[1])
-            elif space[i+1].exterior.distance(Point(p2[0], p2[1])) < 1e-10:
+            elif distance_border(space[i+1], Point(p2[0], p2[1])) < 1e-10:
                 p = Point(p2[0], p2[1])
             else:
                 p = nearest_points(space[i + 1], LineString([p1, p2]))[0]
-                if space[i+1].exterior.distance(p) > 1e-10:
+                if distance_border(space[i+1], p) > 1e-10:
                     raise Exception("Space not driveable!")
 
             x[i+1] = p.x
@@ -2972,19 +2972,30 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
 
             if not pgon.is_empty:
                 p = nearest_points(pgon, Point(x[i-1], v[i-1]))[0]
-            elif space[i - 1].exterior.distance(Point(p1[0], p1[1])) < 1e-10:
+            elif distance_border(space[i - 1], Point(p1[0], p1[1])) < 1e-10:
                 p = Point(p1[0], p1[1])
-            elif space[i - 1].exterior.distance(Point(p2[0], p2[1])) < 1e-10:
+            elif distance_border(space[i - 1], Point(p2[0], p2[1])) < 1e-10:
                 p = Point(p2[0], p2[1])
             else:
                 p = nearest_points(space[i - 1], LineString([p1, p2]))[0]
-                if space[i - 1].exterior.distance(p) > 1e-10:
+                if distance_border(space[i - 1], p) > 1e-10:
                     raise Exception("Space not driveable!")
 
             x[i - 1] = p.x
             v[i - 1] = p.y
 
     return x, v
+
+def distance_border(space, point):
+    """compute the distance of a point from the polytope boundary"""
+
+    if isinstance(space, Polygon):
+        return space.exterior.distance(point)
+    else:
+        dist = np.inf
+        for p in space.geoms:
+            dist = min(dist, p.exterior.distance(point))
+        return dist
 
 def cost_reference_trajectory(ref_traj, area, offset):
     """compute cost based on the distance between the reachable set and the desired reference trajectory"""
