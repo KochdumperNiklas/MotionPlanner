@@ -2293,7 +2293,6 @@ def reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist
             lanes.append(plan[i])
 
     dist = 0
-    dist_plan = np.zeros((len(plan), ))
 
     ind = np.where(plan[:-1] != plan[1:])[0]
     ind = [-1] + ind.tolist() + [len(plan) - 1]
@@ -2303,10 +2302,8 @@ def reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist
             for j in range(ind[i]+1, ind[i+2]+1):
                 if x[j] - dist <= lanelets[lanes[i]].distance[-1]:
                     plan[j] = lanes[i]
-                    dist_plan[j] = dist
                 else:
                     plan[j] = lanes[i+1]
-                    dist_plan[j] = dist
             dist = dist + lanelets[lanes[i]].distance[-1]
 
     # determine indices for all lane changes
@@ -2321,6 +2318,7 @@ def reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist
     center_orientation = [deepcopy(tmp) for i in range(len(lanes))]
     shifts = []
     nonempty = []
+    dist_plan = np.zeros((len(plan),))
 
     for j in range(len(lanes)):
 
@@ -2336,6 +2334,8 @@ def reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist
                     dist = dist + lanelet.distance[-1]
                     step = i
                     break
+
+            dist_plan[i] = dist
 
             for k in range(1, len(lanelet.distance)):
                 if d <= lanelet.distance[k] + 1e-10:
