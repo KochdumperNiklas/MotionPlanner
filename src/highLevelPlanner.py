@@ -1708,7 +1708,7 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
         for j in range(time_step-1, seq.drive_area[i][0]['step']-1, -1):
 
             # check if space is empty
-            if space[j+1].area == 0:
+            if len(space) > j+1 and space[j+1].area == 0:
                 break
 
             # propagate set one time step backward in time
