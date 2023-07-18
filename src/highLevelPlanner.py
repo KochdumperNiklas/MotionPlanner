@@ -1759,7 +1759,7 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
             if i > 0 and is_successor and j == seq.drive_area[i][0]['step'] and len(transitions) == 0:
                 space_ = translate(reach_set_backward(space_prev, param), dist, 0)
                 space_ = space_.intersection(seq.drive_area[i - 1][cnt]['space'])
-                transitions.append({'space': space_, 'step': cnt})
+                transitions.append({'space': space_, 'step': seq.drive_area[i - 1][cnt]['step']})
 
         # select the best transition to take to the previous lanelet
         if i > 0:
