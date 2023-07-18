@@ -50,7 +50,7 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     seq = best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, dist_goal, partially_occupied, safe_dist, param)
 
     # refine the plan: decide on which lanelet to be on for all time steps
-    plan, space = refine_plan(seq, ref_traj, lanelets, safe_dist, param)
+    plan, space, offset = refine_plan(seq, ref_traj, lanelets, safe_dist, param)
 
     # determine time steps in which a lane change is possible
     time_lane = time_steps_lane_change(space, plan, lanelets, free_space)
@@ -59,7 +59,7 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     space_glob = free_space_global(space, plan, time_lane, lanelets, free_space, partially_occupied, param)
 
     # shrink space by intersecting with the forward reachable set
-    space = reduce_space(space, plan, lanelets, param)
+    space = reduce_space(space, plan, lanelets, offset, param)
 
     # extract the safe velocity intervals at each time point
     vel = [(s.bounds[1], s.bounds[3]) for s in space]
@@ -1142,7 +1142,7 @@ def interval2polygon(lb, ub):
     return Polygon([(lb[0], lb[1]), (lb[0], ub[1]), (ub[0], ub[1]), (ub[0], lb[1])])
 
 
-def reduce_space(space, plan, lanelets, param):
+def reduce_space(space, plan, lanelets, offset, param):
     """reduce the space of the drivable area by intersecting with the forward reachable set"""
 
     # loop over all time steps
@@ -1152,9 +1152,9 @@ def reduce_space(space, plan, lanelets, param):
         space_ = reach_set_forward(space[i], param)
 
         # shift set if moving on to a successor lanelet
-        if not plan[i+1] == plan[i] and plan[i+1] in lanelets[plan[i]].successor:
-            dist = lanelets[plan[i]].distance
-            space_ = translate(space_, -dist[len(dist)-1], 0)
+        if not plan[i+1] == plan[i] and plan[i+1] != lanelets[plan[i]].adj_left and plan[i+1] != lanelets[plan[i]].adj_right:
+            dist = offset[plan[i+1]] - offset[plan[i]]
+            space_ = translate(space_, -dist, 0)
 
         # intersect forward reachable set with drivable area
         space[i+1] = space[i+1].intersection(space_)
@@ -1800,7 +1800,16 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
     if len(space) > len(plan):
         space = space[:-1]
 
-    return plan, space
+    # compute space offset for lane changes to successor lanelets
+    offset = {seq.lanelets[0]: 0}
+
+    for i in range(1, len(seq.lanelets)):
+        if lanelets[seq.lanelets[i]] in lanelets[seq.lanelets[i-1]].successor:
+            offset[seq.lanelets[i]] = offset[seq.lanelets[i-1]]
+        else:
+            offset[seq.lanelets[i]] = offset[seq.lanelets[i-1]] + lanelets[seq.lanelets[i-1]].distance[-1]
+
+    return plan, space, offset
 
 def free_space_global(space, plan, time, lanelets, free_space, partially_occupied, param):
     """compute the drivable space in the global coordinate frame"""
