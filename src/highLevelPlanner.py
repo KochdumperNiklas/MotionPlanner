@@ -1263,7 +1263,9 @@ def best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, dist_goal
 
                     for d in drive_area:
                         if goal['time_start'] <= d['step'] <= goal['time_end'] and d['space'].intersects(goal['set']):
-                            final_sets.append({'space': d['space'].intersection(goal['set']), 'step': d['step']})
+                            space_fin = d['space'].intersection(goal['set'])
+                            if space_fin.area > 0:
+                                final_sets.append({'space': space_fin, 'step': d['step']})
 
                     if len(final_sets) > 0:
                         node_temp = expand_node(node, final_sets, drive_area, 'final',
