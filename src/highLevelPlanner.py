@@ -2931,48 +2931,28 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
     # update velocity profile
     if len(corrections) > 0:
 
-        x_prev = deepcopy(x)
+        corrections.append({'index': 0})
 
-        # detemermine best linear velocity profile
-        a_lower = -param['a_max']
-        a_upper = param['a_max']
-
-        for c in corrections:
-            t = c['index']*dt
-            a_upper = min(a_upper, 2*(c['upper'] - x[0] - v[0]*t)/t**2)
-            a_lower = max(a_lower, 2 * (c['lower'] - x[0] - v[0] * t) / t ** 2)
-
-        t = np.arange(len(v))*dt
-
-        if a_upper > a_lower:
-
-            # select velocity profile closest to the original one
-            v_upper = v[0] + a_upper * t
-            v_lower = v[0] + a_lower * t
-
-            if np.mean(abs(v_lower - v)) > np.mean(abs(v_upper - v)):
-                v = v_upper
-                a = a_upper
-            else:
-                v = v_lower
-                a = a_lower
-
-        else:
-            a = 0.5*(a_lower + a_upper)
-            v = v[0] + 0.5*a * t
-
-        for i in range(1, len(x)):
-            x[i] = x[0] + v[0]*(i*dt) + 0.5*a*(i*dt)**2
+        for i in range(1, len(corrections)):
+            i1 = corrections[i - 1]['index']
+            i2 = corrections[i]['index']
+            t = (i2 - i1) * param['time_step']
+            a = 2 * (x[i2] - x[i1] - v[i1] * t) / t ** 2
+            a = max(a, -v[i1] / t)
+            a = max(-param['a_max'], min(param['a_max'], a))
+            for j in range(i1, i2 + 1):
+                t = (j - i1) * param['time_step']
+                v[j] = v[i1] + a * t
+                x[j] = x[i1] + v[i1] * t + 0.5 * a * t ** 2
 
         if corrections[-1]['index'] < len(x):
-            ind = corrections[-1]['index']
-            t = (len(x) - ind)*dt
-            a = 2*(x_prev[-1] - x[ind] - v[ind]*t)/t**2
-            a = max(-param['a_max'], min(a, param['a_max']))
-            for i in range(ind+1, len(x)):
-                t = (i-ind)*dt
-                v[i] = v[ind] + a*t
-                x[i] = x[ind] + v[ind]*t + 0.5*a*t**2
+            i = corrections[-1]['index']
+            a = (v[-1] - v[i]) / ((len(x) - 1 - i) * param['time_step'])
+            a = max(-param['desired_acceleration'], min(param['desired_acceleration'], a))
+            for j in range(i, len(x)):
+                t = (j - i1) * param['time_step']
+                v[j] = v[i1] + a * t
+                x[j] = x[i1] + v[i1] * t + 0.5 * a * t ** 2
 
         # check if driving the desired velocity profile is feasible
         if not space[-1].contains(Point(x[-1], v[-1])):
