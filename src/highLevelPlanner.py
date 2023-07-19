@@ -50,7 +50,7 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     seq = best_lanelet_sequence(lanelets, free_space, ref_traj, change_goal, dist_goal, partially_occupied, safe_dist, param)
 
     # refine the plan: decide on which lanelet to be on for all time steps
-    plan, space, offset = refine_plan(seq, ref_traj, lanelets, safe_dist, param)
+    plan, space, offset = refine_plan(seq, ref_traj, lanelets, safe_dist, partially_occupied, param)
 
     # determine time steps in which a lane change is possible
     time_lane = time_steps_lane_change(space, plan, lanelets, free_space)
@@ -1643,7 +1643,7 @@ def velocity2trajectory(vel_prof, param):
 
     return ref_traj
 
-def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
+def refine_plan(seq, ref_traj, lanelets, safe_dist, partially_occupied, param):
     """refine the plan by deciding on which lanelets to be on at which points in time"""
 
     # determine shift in position when changing to a successor lanelet
@@ -1738,7 +1738,18 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
                         space_ = space[j].intersection(seq.drive_area[i - 1][cnt]['space'])
                         if not isinstance(space_, Polygon):
                             space_ = space_.convex_hull
-                        transitions.append({'space': space_, 'step': j})
+                        if lanelets[seq.lanelets[i-1]].adj_left == seq.lanelets[i]:
+                            space_ = intersection_partially_occupied(space_, partially_occupied, j,
+                                                                     lanelets[seq.lanelets[i-1]], 'left')
+                        elif lanelets[seq.lanelets[i-1]].adj_right == seq.lanelets[i]:
+                            space_ = intersection_partially_occupied(space_, partially_occupied, j,
+                                                                     lanelets[seq.lanelets[i - 1]], 'right')
+                        if isinstance(space_, Polygon):
+                            if not space_.is_empty:
+                                transitions.append({'space': space_, 'step': j})
+                        else:
+                            for p in space_.geoms:
+                                transitions.append({'space': p, 'step': j})
                 cnt = cnt - 1
 
             # catch special case where time steps do not overlap
