@@ -2405,10 +2405,13 @@ def reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist
                 (lanelets[plan[ind[i]]].adj_left is not None and lanelets[plan[ind[i]]].adj_left == plan[ind[i] + 1]):
 
             # compute start and end time step for the lane change
-            ind_start = max(time_lane[i][0]+1, ind[i] - np.floor(param['desired_steps_lane_change']/2)).astype(int)
-            ind_end = min(time_lane[i][-1], ind[i] + np.floor(param['desired_steps_lane_change']/2)).astype(int)
+            ind_start_ = max(time_lane[i][0]+1, ind[i] - np.floor(param['desired_steps_lane_change']/2)).astype(int)
+            ind_end_ = min(time_lane[i][-1], ind[i] + np.floor(param['desired_steps_lane_change']/2)).astype(int)
 
-            for j in range(ind[i], ind_start-1, -1):
+            ind_start = ind[i]
+            ind_end = ind[i]
+
+            for j in range(ind[i], ind_start_-1, -1):
                 found1 = False
                 found2 = False
                 for f in free_space[plan[ind[i]]][j]:
@@ -2419,12 +2422,12 @@ def reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist
                     if f.bounds[0] <= x[j] - dist_plan[j] <= f.bounds[2]:
                         found2 = True
                         break
-                if found1 and found2:
+                if found1 and found2 and len(center_traj[i][j]) > 0 and len(center_traj[i+1][j]) > 0:
                     ind_start = j
                 else:
                     break
 
-            for j in range(ind[i], ind_end+1):
+            for j in range(ind[i], ind_end_+1):
                 found1 = False
                 found2 = False
                 for f in free_space[plan[ind[i]]][j]:
@@ -2435,7 +2438,7 @@ def reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist
                     if f.bounds[0] <= x[j] - dist_plan[j] <= f.bounds[2]:
                         found2 = True
                         break
-                if found1 and found2:
+                if found1 and found2 and len(center_traj[i][j]) > 0 and len(center_traj[i+1][j]) > 0:
                     ind_end = j
                 else:
                     break
