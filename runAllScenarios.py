@@ -25,7 +25,7 @@ from src.lowLevelPlannerOptimization import lowLevelPlannerOptimization
 import warnings
 warnings.filterwarnings("ignore")
 
-PLANNER = 'Optimization'   # planner ('HighLevel', 'Automaton', 'AutomatonNaive' or 'Optimization')
+PLANNER = 'HighLevel'   # planner ('HighLevel', 'Automaton', 'AutomatonNaive' or 'Optimization')
 VIDEO = False           # create videos for all scenarios that can be solved
 TIMEOUT = 100           # maximum computation time
 
@@ -34,11 +34,21 @@ def solve_scenario(file, return_dict, MA):
 
     comp_time = 'error'
     collision = 'no collision'
-    final_time = -1
     x = None
 
     # load the CommonRoad scenario
     scenario, planning_problem = CommonRoadFileReader(os.path.join('scenarios', file)).open(lanelet_assignment=True)
+
+    # get final time and tags for the scenario
+    steps = 0
+    planning_problem_ = list(planning_problem.planning_problem_dict.values())[0]
+
+    for i in range(len(planning_problem_.goal.state_list)):
+        goal_state = planning_problem_.goal.state_list[i]
+        steps = np.maximum(goal_state.time_step.end - planning_problem_.initial_state.time_step, steps)
+
+    return_dict['final_time'] = steps * scenario.dt
+    return_dict['tags'] = ';'.join([t.name for t in scenario.tags])
 
     # parameter for the car
     param = vehicleParameter()
@@ -68,8 +78,7 @@ def solve_scenario(file, return_dict, MA):
             print(f + ': failed')
             comp_time = 'failed'
         else:
-            final_time = param['steps'] * param['time_step']
-            comp_time = comp_time / final_time
+            comp_time = comp_time / return_dict['final_time']
             savemat(join('solutions', PLANNER, file[:-4]) + '.mat', {'x': x, 'u': u})
             print(f + ': ' + str(comp_time))
             if not collisionChecker(scenario, x, param):
@@ -82,8 +91,6 @@ def solve_scenario(file, return_dict, MA):
 
     return_dict['comp_time'] = comp_time
     return_dict['collision'] = collision
-    return_dict['tags'] = ';'.join([t.name for t in scenario.tags])
-    return_dict['final_time'] = final_time
 
 if __name__ == "__main__":
     """main entry point"""
@@ -130,8 +137,9 @@ if __name__ == "__main__":
         else:
             comp_time = return_dict['comp_time']
             collision = return_dict['collision']
-            tags = return_dict['tags']
-            final_time = return_dict['final_time']
+
+        tags = return_dict['tags']
+        final_time = return_dict['final_time']
 
         data.append([f, comp_time, collision, tags, final_time])
 
