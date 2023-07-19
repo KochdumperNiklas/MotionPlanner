@@ -2432,11 +2432,12 @@ def reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist
             lane_changes.append({'ind': np.arange(ind_start, ind_end+1), 'lanes': [plan[ind[i]], plan[ind[i]+1]]})
 
             # interpolate between the center trajectories for the two lanes
-            for j in range(ind_start, ind_end+1):
+            if ind_end - ind_start > 0:
+                for j in range(ind_start, ind_end+1):
 
-                w = 1/(1 + np.exp(-5*(2*((j - ind_start)/(ind_end - ind_start))-1)))
-                p = (1-w) * center_traj[i][j] + w * center_traj[i+1][j]
-                ref_traj[:, j] = p
+                    w = 1/(1 + np.exp(-5*(2*((j - ind_start)/(ind_end - ind_start))-1)))
+                    p = (1-w) * center_traj[i][j] + w * center_traj[i+1][j]
+                    ref_traj[:, j] = p
 
     # extend reference trajectory by velocity and orientation
     velocity = velocity_reference_trajectory(ref_traj, param)
