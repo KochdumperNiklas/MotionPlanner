@@ -1804,7 +1804,7 @@ def refine_plan(seq, ref_traj, lanelets, safe_dist, param):
     offset = {seq.lanelets[0]: 0}
 
     for i in range(1, len(seq.lanelets)):
-        if lanelets[seq.lanelets[i]] in lanelets[seq.lanelets[i-1]].successor:
+        if lanelets[seq.lanelets[i]] in lanelets[seq.lanelets[i-1]].successor or seq.lanelets[i] == seq.lanelets[i-1]:
             offset[seq.lanelets[i]] = offset[seq.lanelets[i-1]]
         else:
             offset[seq.lanelets[i]] = offset[seq.lanelets[i-1]] + lanelets[seq.lanelets[i-1]].distance[-1]
