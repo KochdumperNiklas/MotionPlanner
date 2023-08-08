@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from shapely.geometry.polygon import Polygon
 
-def polygonLaneletNetwork(scenario):
+def polygonLaneletNetwork(scenario, safe_only=False, x0=None):
     """convert the lanelelt network to a single polygon"""
 
     # create dictionary that maps a lanelet ID to the corresponding lanelet
@@ -10,7 +10,10 @@ def polygonLaneletNetwork(scenario):
     lanelets = dict(zip(id, scenario.lanelet_network.lanelets))
 
     # initialization
-    queue = [scenario.lanelet_network.lanelets[0].lanelet_id]
+    if x0 is None:
+        queue = [scenario.lanelet_network.lanelets[0].lanelet_id]
+    else:
+        queue = scenario.lanelet_network.find_lanelet_by_position([x0[0:2]])[0]
     visited = []
     pgon = lanelet2polygon(lanelets[queue[0]])
 
@@ -27,15 +30,17 @@ def polygonLaneletNetwork(scenario):
 
         # explore lanelets to the left
         if l.adj_left is not None and l.adj_left not in visited:
-            tmp = union_left(l, lanelets[l.adj_left])
-            pgon = pgon.union(tmp)
-            queue.append(l.adj_left)
+            if not safe_only or l.adj_left_same_direction:
+                tmp = union_left(l, lanelets[l.adj_left])
+                pgon = pgon.union(tmp)
+                queue.append(l.adj_left)
 
         # explore lanelets to the right
         if l.adj_right is not None and l.adj_right not in visited:
-            tmp = union_left(lanelets[l.adj_right], l)
-            pgon = pgon.union(tmp)
-            queue.append(l.adj_right)
+            if not safe_only or l.adj_right_same_direction:
+                tmp = union_left(lanelets[l.adj_right], l)
+                pgon = pgon.union(tmp)
+                queue.append(l.adj_right)
 
         # explore successor lanelets
         for s in l.successor:
@@ -47,17 +52,19 @@ def polygonLaneletNetwork(scenario):
         # explore predecessor lanelets
         for p in l.predecessor:
             if p not in visited:
-                tmp = union_successor(lanelets[p], l)
-                pgon = pgon.union(tmp)
-                queue.append(p)
+                if not safe_only:
+                    tmp = union_successor(lanelets[p], l)
+                    pgon = pgon.union(tmp)
+                    queue.append(p)
 
         visited.append(l.lanelet_id)
 
         # make sure all lanelets have been considered
         if len(queue) == 0:
-            for l in lanelets.keys():
-                if l not in visited:
-                    queue.append(l)
+            if not safe_only:
+                for l in lanelets.keys():
+                    if l not in visited:
+                        queue.append(l)
 
     return pgon
 
