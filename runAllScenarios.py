@@ -21,11 +21,12 @@ from auxiliary.collisionChecker import collisionChecker
 from src.highLevelPlanner import highLevelPlanner
 from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
 from src.lowLevelPlannerOptimization import lowLevelPlannerOptimization
+from src.maneuverAutomatonPlannerStandalone import maneuverAutomatonPlannerStandalone
 
 import warnings
 warnings.filterwarnings("ignore")
 
-PLANNER = 'HighLevel'   # planner ('HighLevel', 'Automaton', 'AutomatonNaive' or 'Optimization')
+PLANNER = 'AutomatonStandalone'   # planner ('HighLevel', 'Automaton', 'AutomatonStandalone' or 'Optimization')
 VIDEO = False           # create videos for all scenarios that can be solved
 TIMEOUT = 100           # maximum computation time
 
@@ -73,6 +74,10 @@ def solve_scenario(file, return_dict, MA):
             comp_time = time.time() - start_time
             x = ref_traj
             u = np.zeros((2, ref_traj.shape[1]))
+        elif PLANNER == 'AutomatonStandalone':
+            start_time = time.time()
+            x, u = maneuverAutomatonPlannerStandalone(scenario, planning_problem, param, MA)
+            comp_time = time.time() - start_time
 
         if x is None:
             print(f + ': failed')
@@ -103,7 +108,7 @@ if __name__ == "__main__":
         os.mkdir(join('solutions', PLANNER))
 
     # load maneuver automaton
-    if PLANNER == 'Automaton' or PLANNER == 'AutomatonNaive':
+    if PLANNER == 'Automaton' or PLANNER == 'AutomatonStandalone':
         MA = loadAROCautomaton()
     else:
         MA = None
