@@ -414,7 +414,10 @@ def velocity_profile(dist, speed_limit, param):
 
         for goal in param['goal']:
             if goal['lane'] is not None and speed_limit[goal['lane']] is not None:
-                vel_des = min(vel_des, speed_limit[goal['lane']])
+                if vel_des == np.inf:
+                    vel_des = speed_limit[goal['lane']]
+                else:
+                    vel_des = max(vel_des, speed_limit[goal['lane']])
 
         if vel_des == np.inf:
             vel_des = param['v_init']
