@@ -2939,16 +2939,14 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
             t = (i2 - i1) * param['time_step']
             a = 2 * (x[i2] - x[i1] - v[i1] * t) / t ** 2
             a = max(a, -v[i1] / t)
-            a = max(-param['a_max'], min(param['a_max'], a))
             for j in range(i1, i2 + 1):
                 t = (j - i1) * param['time_step']
                 v[j] = v[i1] + a * t
                 x[j] = x[i1] + v[i1] * t + 0.5 * a * t ** 2
 
-        if corrections[-1]['index'] < len(x):
+        if corrections[-1]['index'] < len(x) - 1:
             i = corrections[-1]['index']
             a = (v[-1] - v[i]) / ((len(x) - 1 - i) * param['time_step'])
-            a = max(-param['desired_acceleration'], min(param['desired_acceleration'], a))
             for j in range(i, len(x)):
                 t = (j - i1) * param['time_step']
                 v[j] = v[i1] + a * t
@@ -2956,7 +2954,11 @@ def improve_trajectory_position_velocity(space, plan, x, v, lanelets, safe_dist,
 
         # check if driving the desired velocity profile is feasible
         if not space[-1].contains(Point(x[-1], v[-1])):
-            p = nearest_points(space[-1], Point(x[-1], v[-1]))[0]
+            if corrections[-1]['index'] < len(x) - 1:
+                p = nearest_points(space[-1], Point(x[-1], v[-1]))[0]
+            else:
+                pgon = space[-1].intersection(LineString([(x[-1], space[-1].bounds[1]), (x[-1], space[-1].bounds[3])]))
+                p = nearest_points(pgon, Point(x[-1], v[-1]))[0]
             x[-1] = p.x
             v[-1] = p.y
 
