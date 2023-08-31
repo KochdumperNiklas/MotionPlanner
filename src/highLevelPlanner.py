@@ -16,7 +16,7 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000, weight_velocity=1,
                      weight_safe_distance=10, minimum_safe_distance=1, minimum_steps_lane_change=5,
                      desired_steps_lane_change=20, desired_acceleration=1, desired_velocity='speed_limit',
-                     compute_free_space=True, goal_set_priority=False):
+                     compute_free_space=True, goal_set_priority=False, improve_reference_trajectory=False):
     """decide on which lanelets to be at all points in time"""
 
     # store algorithm settings
@@ -30,6 +30,7 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     param['desired_velocity'] = desired_velocity
     param['compute_free_space'] = compute_free_space
     param['goal_set_priority'] = goal_set_priority
+    param['improve_reference_trajectory'] = improve_reference_trajectory
 
     # extract required information from the planning problem
     param, lanelets, speed_limit, dist_init = initialization(scenario, planning_problem, param)
@@ -2307,7 +2308,9 @@ def reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist
 
     # compute suitable velocity profile
     x, v = trajectory_position_velocity(deepcopy(space), plan, vel_prof, lanelets, safe_dist, param)
-    x, v = improve_trajectory_position_velocity(deepcopy(space), plan, x, v, lanelets, safe_dist, param)
+
+    if param['improve_reference_trajectory']:
+        x, v = improve_trajectory_position_velocity(deepcopy(space), plan, x, v, lanelets, safe_dist, param)
 
     # update plan (= lanelet-time-assignment)
     plan = np.asarray(plan)
