@@ -149,6 +149,7 @@ def main():
     client = carla.Client('localhost', 2000)
     client.set_timeout(5.0)
     world = client.get_world()
+    traffic_manager = client.get_trafficmanager(3000)
     client.load_world(MAP)
 
     # load parameter for the car
@@ -219,7 +220,7 @@ def main():
         if (point.location.x - x0[0])**2 + (-point.location.y - x0[1])**2 > 10**2:
             world.try_spawn_actor(random.choice(vehicle_blueprints), point)
     for v in world.get_actors().filter('*vehicle*'):
-        v.set_autopilot(True)
+        v.set_autopilot(True, traffic_manager.get_port())
 
     try:
 
@@ -228,6 +229,8 @@ def main():
         vehicle = world.spawn_actor(blueprint_library.find('vehicle.tesla.model3'), start_pose)
         actor_list.append(vehicle)
         vehicle.set_simulate_physics(REAL_DYNAMICS)
+        param['length'] = 2*vehicle.bounding_box.extent.x
+        param['width'] = 2*vehicle.bounding_box.extent.y
 
         # select camara view
         camera_rgb = world.spawn_actor(blueprint_library.find('sensor.camera.rgb'),
@@ -274,8 +277,10 @@ def main():
                         if (transform.location.x - x0[0])**2 + (-transform.location.y - x0[1])**2 < SENSORRANGE**2 and \
                             (transform.location.x - x0[0]) ** 2 + (-transform.location.y - x0[1]) ** 2 > 0.1:
                             orientation = np.deg2rad(transform.rotation.yaw)
-                            velocity = v.get_velocity()
-                            velocity = np.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+                            vel = v.get_velocity()
+                            velocity = np.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)
+                            acc = v.get_acceleration()
+                            acceleration = np.sqrt(acc.x ** 2 + acc.y ** 2 + acc.z ** 2) * np.sign(acc.x*vel.x + acc.y*vel.y)
                             length = 2*v.bounding_box.extent.x
                             width = 2*v.bounding_box.extent.y
                             if length == 0:
@@ -284,7 +289,7 @@ def main():
                                 width = 1
 
                             state = CustomState(position=np.array([transform.location.x, -transform.location.y]),
-                                                velocity=velocity, orientation=-orientation, time_step=0)
+                                                velocity=velocity, orientation=-orientation, time_step=0, acceleration=acceleration)
                             shape = Rectangle(width=width, length=length)
                             dynamic_obstacle = DynamicObstacle(scenario.generate_object_id(), ObstacleType.CAR, shape,
                                                                state)
@@ -379,7 +384,8 @@ def main():
                     # solve motion planning problem
                     start_time = time.time()
                     try:
-                        plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param)
+                        plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param, compute_free_space=False, 
+                                                                      minimum_safe_distance=0.5, improve_velocity_profile=True)
                     except Exception as e:
                         print(e)
                         return
@@ -416,9 +422,9 @@ def main():
                     acc = u[0] / 6.17
                     steer = -u[1]
 
-                    if abs(velocity) < 0.1:
+                    if abs(velocity) < 0.5:
                         steer = 0
-                        if all(ref_traj[2, :] < 0.1) and acc > 0:
+                        if all(ref_traj[2, :] < 0.5) and acc > 0:
                             acc = 0
 
                     if acc > 0:
@@ -428,8 +434,6 @@ def main():
 
                     traj['u'].append(np.array([acc, steer]))
                     traj['t'].append(traj['t'][-1] + 1 / FREQUENCY)
-                    #filehandler = open(os.path.join('data', 'trajectory.obj'), 'wb')
-                    #pickle.dump(traj, filehandler)
 
                 else:
                     x0 = x[:, np.floor(t/param['time_step'])]
