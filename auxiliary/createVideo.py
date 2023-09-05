@@ -40,7 +40,7 @@ def createVideo(file, scenario, planning_problem, param, x):
         planning_problem.draw(rnd)
 
         # draw ego vehicle
-        settings = ShapeParams(opacity=1, edgecolor="k", linewidth=0.0, zorder=17, facecolor='r')
+        settings = ShapeParams(opacity=1, edgecolor="k", linewidth=0.0, zorder=17, facecolor='#d95558')
         r = Rectangle(length=param['length'], width=param['width'], center=np.array([x[0, i], x[1, i]]), orientation=x[3, i])
         r.draw(rnd, settings)
 

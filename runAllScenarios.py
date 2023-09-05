@@ -26,7 +26,7 @@ from src.maneuverAutomatonPlannerStandalone import maneuverAutomatonPlannerStand
 import warnings
 warnings.filterwarnings("ignore")
 
-PLANNER = 'AutomatonStandalone'   # planner ('HighLevel', 'Automaton', 'AutomatonStandalone' or 'Optimization')
+PLANNER = 'HighLevel'   # planner ('HighLevel', 'Automaton', 'AutomatonStandalone' or 'Optimization')
 VIDEO = False           # create videos for all scenarios that can be solved
 TIMEOUT = 100           # maximum computation time
 
@@ -88,7 +88,7 @@ def solve_scenario(file, return_dict, MA):
             print(f + ': ' + str(comp_time))
             if not collisionChecker(scenario, x, param):
                 collision = 'collision'
-            if VIDEO:
+            elif VIDEO:
                 createVideo(f, scenario, planning_problem, param, x)
     except Exception as e:
         comp_time = str(e).replace("\n", "").replace(",", "")
