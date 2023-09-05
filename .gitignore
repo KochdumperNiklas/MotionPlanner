@@ -1,7 +1,6 @@
 __pycache__/
 *.project
 *.pyc
-*.csv
 /videos/*
 /solutions/*
 /maneuverAutomaton/AROC/primitives/*
