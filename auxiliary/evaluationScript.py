@@ -1,7 +1,7 @@
 import csv
 import os
 
-PLANNER = 'HighLevel'   # planner ('HighLevel', 'Automaton', 'AutomatonNaive' or 'Optimization')
+PLANNER = 'Optimization'   # planner ('HighLevel', 'Automaton', 'AutomatonStandalone' or 'Optimization')
 
 def evaluation_matrics(data):
     """compute the performance metrics for the given data"""
@@ -12,18 +12,19 @@ def evaluation_matrics(data):
 
     for d in data:
         if d[1].replace('.', '', 1).isdigit():
-            comp_time = comp_time + float(d[1])
-            success = success + 1
             if d[2] == 'collision':
                 collisions = collisions + 1
+            else:
+                success = success + 1
+                comp_time = comp_time + float(d[1])
 
-    return success/len(data) * 100, comp_time/success, collisions/success * 100
+    return success/len(data) * 100, comp_time/success, collisions/len(data) * 100
 
 def print_results(success, comp_time, collisions):
     """print the performance metrics to the console"""
 
     print('success rate:           ' + "{:10.2f}".format(success) + '%')
-    print('computatoin time:       ' + "{:10.2f}".format(comp_time) + 's')
+    print('computation time:       ' + "{:10.3f}".format(comp_time) + 's')
     print('collisions:             ' + "{:10.2f}".format(collisions) + '%')
 
 if __name__ == "__main__":
