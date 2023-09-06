@@ -44,7 +44,7 @@ REPLAN = 5
 
 
 # select the CommonRoad scenario that should be solved
-file = "Town03.xml"
+file = "Town01.xml"
 
 # load parameter for the car
 param = vehicleParameter()
@@ -78,6 +78,7 @@ route = candidate_holder.retrieve_first_route()
 # initialization
 state = planning_problem.initial_state
 x0 = np.concatenate((state.position, np.array([state.velocity, state.orientation])))
+x0[1] = x0[1] - 100
 #x0 = np.concatenate((state.position, np.array([5, state.orientation])))
 lanelet = route.list_ids_lanelets[0]
 cnt_init = 0
@@ -89,9 +90,9 @@ while lanelet != route.list_ids_lanelets[-1]:
 
     # predict future positions of the surrounding traffic participants
     vehicles = []
-    vehicles.append({'width': 2, 'length': 5, 'x': 380, 'y': -2, 'velocity': 10, 'orientation': 0})
-    vehicles.append({'width': 2, 'length': 5, 'x': 320, 'y': -2, 'velocity': 10, 'orientation': 0})
-    vehicles.append({'width': 2, 'length': 5, 'x': 396.5, 'y': -40, 'velocity': 10, 'orientation': np.pi / 2})
+    #vehicles.append({'width': 2, 'length': 5, 'x': 380, 'y': -2, 'velocity': 10, 'orientation': 0})
+    #vehicles.append({'width': 2, 'length': 5, 'x': 320, 'y': -2, 'velocity': 10, 'orientation': 0})
+    #vehicles.append({'width': 2, 'length': 5, 'x': 396.5, 'y': -40, 'velocity': 0, 'orientation': np.pi / 2})
 
     scenario_ = deepcopy(scenario)
 
@@ -142,8 +143,13 @@ while lanelet != route.list_ids_lanelets[-1]:
     planning_problem = PlanningProblemSet([PlanningProblem(1, initial_state, goal_region)])
 
     # solve motion planning problem
-    plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param, priority)
-    x, u = lowLevelPlannerManeuverAutomaton(scenario_, planning_problem, param, plan, vel, space, ref_traj, MA)
+    plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param, goal_set_priority=priority, weight_safe_distance=10, desired_acceleration=2)
+    #x, u = lowLevelPlannerManeuverAutomaton(scenario_, planning_problem, param, plan, vel, space, ref_traj, MA)
+    x, u, _ = lowLevelPlannerOptimization(scenario_, planning_problem, param, plan, vel, space, ref_traj)
+    print(x[2, -1])
+
+    if x[2, -1] < 1:
+        test = 1
 
     # visualization
     for i in range(REPLAN):

@@ -4,6 +4,8 @@ from copy import deepcopy
 from lxml import etree
 from shapely.geometry import Point
 from shapely.geometry import LineString
+from shapely.ops import nearest_points
+import matplotlib.pyplot as plt
 
 from commonroad.scenario.scenario import Tag
 from commonroad.scenario.lanelet import Lanelet
@@ -18,7 +20,7 @@ from commonroad.common.file_writer import CommonRoadFileWriter, OverwriteExistin
 from commonroad.planning.planning_problem import PlanningProblemSet
 from commonroad.common.file_reader import CommonRoadFileReader
 
-from crdesigner.map_conversion.map_conversion_interface import opendrive_to_commonroad
+#from crdesigner.map_conversion.map_conversion_interface import opendrive_to_commonroad
 
 def remove_small_lanelets(scenario):
 
@@ -312,6 +314,101 @@ def mirror_lanelets(scenario, index):
 
     return scenario
 
+def split_lanelet(scenario, point):
+    """split the lanelet at the given point"""
+
+    # get lanelet
+    l = scenario.lanelet_network.find_lanelet_by_position([point])
+
+    lanelets = scenario.lanelet_network.lanelets
+
+    for i in range(len(lanelets)):
+        if lanelets[i].lanelet_id == l[0][0]:
+            index = i
+
+    l = lanelets[index]
+
+    # get distance on the lanelet
+    dist = np.inf
+
+    for i in range(len(l.distance) - 1):
+
+        line = LineString([(l.center_vertices[i, 0], l.center_vertices[i, 1]),
+                           (l.center_vertices[i + 1, 0], l.center_vertices[i + 1, 1])])
+
+        if line.distance(Point(point[0], point[1])) < dist:
+            p = nearest_points(line, Point(point[0], point[1]))[0]
+            val = l.distance[i] + np.sqrt((p.x - l.center_vertices[i, 0]) ** 2 + (p.y - l.center_vertices[i, 1]) ** 2)
+            dist = line.distance(Point(point[0], point[1]))
+            ind = i
+
+    """diff = l.center_vertices.T - np.expand_dims(np.asarray(point), axis=1) @ np.ones((1, len(l.distance)))
+    dist = np.sum(diff**2, axis=0)
+    ind = np.argmin(dist)"""
+
+    # construct intermediate point
+    factor = (val - l.distance[ind])/(l.distance[ind+1] - l.distance[ind])
+    diff = l.center_vertices[ind+1, :]-l.center_vertices[ind, :]
+    diff = diff/np.linalg.norm(diff)
+
+    p_center = l.center_vertices[[ind], :] + factor*(l.center_vertices[[ind+1], :]-l.center_vertices[[ind], :])
+
+    line = LineString([(p_center[0, 0] - diff[1]*10, p_center[0, 1] + diff[0]*10),
+                       (p_center[0, 0] + diff[1]*10, p_center[0, 1] - diff[0]*10)])
+    line_left = LineString([(l.left_vertices[ind, 0], l.left_vertices[ind, 1]),
+                       (l.left_vertices[ind + 1, 0], l.left_vertices[ind+1, 1])])
+    p_left = line.intersection(line_left)
+    p_left = np.array([[p_left.x, p_left.y]])
+
+    line_right = LineString([(l.right_vertices[ind, 0], l.right_vertices[ind, 1]),
+                            (l.right_vertices[ind + 1, 0], l.right_vertices[ind + 1, 1])])
+    p_right = line.intersection(line_right)
+    p_right = np.array([[p_right.x, p_right.y]])
+
+    # construct split lanelets
+    id = scenario.generate_object_id()
+
+    l1 = Lanelet(np.concatenate((l.right_vertices[:ind+1, :], p_right), axis=0),
+                 np.concatenate((l.center_vertices[:ind+1, :], p_center), axis=0),
+                 np.concatenate((l.left_vertices[:ind+1, :], p_left), axis=0), l.lanelet_id,
+                          predecessor=l.predecessor, successor=[id], adjacent_left=None,
+                          adjacent_left_same_direction=False, adjacent_right=None,
+                          adjacent_right_same_direction=False,
+                          line_marking_left_vertices=l.line_marking_left_vertices,
+                          line_marking_right_vertices=l.line_marking_right_vertices,
+                          stop_line=l.stop_line, lanelet_type=l.lanelet_type, user_one_way=l.user_one_way,
+                          user_bidirectional=l.user_bidirectional, traffic_signs=l.traffic_signs,
+                          traffic_lights=l.traffic_lights)
+
+    l2 = Lanelet(np.concatenate((p_right, l.right_vertices[ind+1:, :]), axis=0),
+                 np.concatenate((p_center, l.center_vertices[ind+1:, :]), axis=0),
+                 np.concatenate((p_left, l.left_vertices[ind+1:, :]), axis=0), id,
+                 predecessor=[l.lanelet_id], successor=l.successor, adjacent_left=None,
+                 adjacent_left_same_direction=False, adjacent_right=None,
+                 adjacent_right_same_direction=False,
+                 line_marking_left_vertices=l.line_marking_left_vertices,
+                 line_marking_right_vertices=l.line_marking_right_vertices,
+                 stop_line=l.stop_line, lanelet_type=l.lanelet_type, user_one_way=l.user_one_way,
+                 user_bidirectional=l.user_bidirectional, traffic_signs=l.traffic_signs,
+                 traffic_lights=l.traffic_lights)
+
+    lanelets[index] = l1
+    lanelets.append(l2)
+
+    for s in l.successor:
+        for i in range(len(lanelets)):
+            if lanelets[i].lanelet_id == s:
+                pre = lanelets[i].predecessor
+                for j in range(len(pre)):
+                    if pre[j] == l.lanelet_id:
+                        pre[j] = id
+                lanelets[i].predecessor = pre
+
+    network = LaneletNetwork.create_from_lanelet_list(lanelets, cleanup_ids=True)
+    scenario.replace_lanelet_network(network)
+
+    return scenario
+
 def add_speed_limit(scenario, limit):
     """add a speed limit to all lanelets"""
 
@@ -398,17 +495,40 @@ def simplify_lanelet_polygons(scenario, tol):
 
     return scenario
 
+def remove_all_traffic_signs(scenario):
+    """remove all traffic signs from the scenario"""
 
+    ids = []
+    for s in scenario.lanelet_network.traffic_signs:
+        ids.append(s.traffic_sign_id)
+    for id in ids:
+        scenario.lanelet_network.remove_traffic_sign(id)
+
+    return scenario
 
 if __name__ == "__main__":
     """main entry point"""
 
     # load OpenDRIVE file, parse it, and convert it to a CommonRoad scenario
-    scenario = opendrive_to_commonroad("Town03.xodr")
-    #scenario, planning_problem = CommonRoadFileReader('Town01.xml').open()
+    #scenario = opendrive_to_commonroad("Town03.xodr")
+    scenario, planning_problem = CommonRoadFileReader('Town01.xml').open()
+
+    """scenario = split_lanelet(scenario, [2, -11.24])
+    scenario = split_lanelet(scenario, [-2, -11.24])
+
+    scenario = split_lanelet(scenario, [392, -11.24])
+    scenario = split_lanelet(scenario, [396, -11.24])
+
+    scenario = split_lanelet(scenario, [2, -317.3])
+    scenario = split_lanelet(scenario, [-2, -317.3])
+
+    scenario = split_lanelet(scenario, [392, -317.3])
+    scenario = split_lanelet(scenario, [396, -317.3])"""
+
+    test = 1
 
     # remove small lanelets
-    scenario = remove_small_lanelets(scenario)
+    """scenario = remove_small_lanelets(scenario)
 
     # reduce number of points used to represent the lanelet
     scenario = simplify_lanelet_polygons(scenario, 0.05)
@@ -460,18 +580,18 @@ if __name__ == "__main__":
     initial_state = InitialState(position=np.array([140, 205]), velocity=0, orientation=-np.pi, yaw_rate=0,
                                  slip_angle=0, time_step=0)
     #initial_state = InitialState(position=np.array([396.5, -30]), velocity=0, orientation=np.pi/2, yaw_rate=0, slip_angle=0, time_step=0)
-    planning_problem = PlanningProblem(1, initial_state, goal_region)
+    planning_problem = PlanningProblem(1, initial_state, goal_region)"""
 
     # store converted file as CommonRoad scenario
     writer = CommonRoadFileWriter(
         scenario=scenario,
-        planning_problem_set=PlanningProblemSet([planning_problem]),
+        planning_problem_set=planning_problem,
         author="Sebastian Maierhofer",
         affiliation="Technical University of Munich",
         source="CommonRoad Scenario Designer",
         tags={Tag.URBAN},
     )
-    writer.write_to_file(os.path.dirname(os.path.realpath(__file__)) + "/" + "Town03.xml",
+    writer.write_to_file(os.path.dirname(os.path.realpath(__file__)) + "/" + "Town01.xml",
                          OverwriteExistingFile.ALWAYS)
 
 
