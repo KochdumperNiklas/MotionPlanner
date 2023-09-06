@@ -5,7 +5,7 @@ from os.path import isfile, join
 
 # get all available video files
 folder = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-path = join(folder, 'videos')
+path = join(folder, 'results', 'videos')
 videos = [f for f in listdir(path) if isfile(join(path, f)) and not f.startswith('video')]
 
 # create the new video

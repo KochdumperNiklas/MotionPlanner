@@ -16,13 +16,18 @@ import cv2
 def createVideo(file, scenario, planning_problem, param, x):
 
     # create video folder if it does not exist yet
-    if not os.path.isdir('videos'):
-        os.mkdir('videos')
+    path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    if not os.path.isdir(os.path.join(path, 'results')):
+        os.mkdir(os.path.join(path, 'results'))
+
+    if not os.path.isdir(os.path.join(path, 'results', 'videos')):
+        os.mkdir(os.path.join(path, 'results', 'videos'))
 
     # initialize video writer
     fps = 10
     fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-    video = cv2.VideoWriter(os.path.join('videos', file[0:-4] + '.mp4'), fourcc, fps, (2500, 1500))
+    video = cv2.VideoWriter(os.path.join(path, 'results', 'videos', file[0:-4] + '.mp4'), fourcc, fps, (2500, 1500))
 
     # create figure
     plt.figure(figsize=(25, 15))

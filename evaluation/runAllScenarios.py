@@ -13,6 +13,9 @@ import multiprocessing
 import pickle
 from scipy.io import savemat
 
+import sys
+sys.path.append('./')
+
 from vehicle.vehicleParameter import vehicleParameter
 from maneuverAutomaton.ManeuverAutomaton import ManeuverAutomaton
 from maneuverAutomaton.loadAROCautomaton import loadAROCautomaton
@@ -30,7 +33,7 @@ PLANNER = 'HighLevel'   # planner ('HighLevel', 'Automaton', 'AutomatonStandalon
 VIDEO = False           # create videos for all scenarios that can be solved
 TIMEOUT = 100           # maximum computation time
 
-def solve_scenario(file, return_dict, MA):
+def solve_scenario(file, return_dict, MA, path):
     """solve a single motion planning problem"""
 
     comp_time = 'error'
@@ -58,25 +61,25 @@ def solve_scenario(file, return_dict, MA):
     try:
         if PLANNER == 'Automaton':
             start_time = time.time()
-            plan, vel, space, ref_traj = highLevelPlanner(scenario, planning_problem, param, desired_velocity='init')
-            x, u = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space, ref_traj, MA)
+            plan, space, ref_traj = highLevelPlanner(scenario, planning_problem, param, desired_velocity='init')
+            x, u, _ = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, space, ref_traj, MA)
             comp_time = time.time() - start_time
         elif PLANNER == 'Optimization':
             start_time = time.time()
-            plan, vel, space, ref_traj = highLevelPlanner(scenario, planning_problem, param, compute_free_space=False,
+            plan, space, ref_traj = highLevelPlanner(scenario, planning_problem, param, compute_free_space=False,
                                                           desired_velocity='init')
-            x, u, _ = lowLevelPlannerOptimization(scenario, planning_problem, param, plan, vel, space, ref_traj)
+            x, u, _ = lowLevelPlannerOptimization(scenario, planning_problem, param, space, ref_traj)
             comp_time = time.time() - start_time
         elif PLANNER == 'HighLevel':
             start_time = time.time()
-            plan, vel, space, ref_traj = highLevelPlanner(scenario, planning_problem, param, compute_free_space=False,
+            plan, space, ref_traj = highLevelPlanner(scenario, planning_problem, param, compute_free_space=False,
                                                           desired_velocity='init')
             comp_time = time.time() - start_time
             x = ref_traj
             u = np.zeros((2, ref_traj.shape[1]))
         elif PLANNER == 'AutomatonStandalone':
             start_time = time.time()
-            x, u = maneuverAutomatonPlannerStandalone(scenario, planning_problem, param, MA)
+            x, u, _ = maneuverAutomatonPlannerStandalone(scenario, planning_problem, param, MA)
             comp_time = time.time() - start_time
 
         if x is None:
@@ -84,7 +87,7 @@ def solve_scenario(file, return_dict, MA):
             comp_time = 'failed'
         else:
             comp_time = comp_time / return_dict['final_time']
-            savemat(join('solutions', PLANNER, file[:-4]) + '.mat', {'x': x, 'u': u})
+            savemat(join(path, 'results', 'solutions', PLANNER, file[:-4]) + '.mat', {'x': x, 'u': u})
             print(f + ': ' + str(comp_time))
             if not collisionChecker(scenario, x, param):
                 collision = 'collision'
@@ -100,12 +103,18 @@ def solve_scenario(file, return_dict, MA):
 if __name__ == "__main__":
     """main entry point"""
 
-    # create folders for storing the solutions
-    if not os.path.isdir('solutions'):
-        os.mkdir('solutions')
+    # get path to root directory
+    rootpath = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    if not os.path.isdir(join('solutions', PLANNER)):
-        os.mkdir(join('solutions', PLANNER))
+    # create folders for storing the solutions
+    if not os.path.isdir(join(rootpath, 'results')):
+        os.mkdir(join(rootpath, 'results'))
+
+    if not os.path.isdir(join(rootpath, 'results', 'solutions')):
+        os.mkdir(join(rootpath, 'results', 'solutions'))
+
+    if not os.path.isdir(join(rootpath, 'results', 'solutions', PLANNER)):
+        os.mkdir(join(rootpath, 'results', 'solutions', PLANNER))
 
     # load maneuver automaton
     if PLANNER == 'Automaton' or PLANNER == 'AutomatonStandalone':
@@ -125,7 +134,7 @@ if __name__ == "__main__":
         # solve the scenario
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
-        p = multiprocessing.Process(target=solve_scenario, args=(f, return_dict, MA))
+        p = multiprocessing.Process(target=solve_scenario, args=(f, return_dict, MA, rootpath))
         p.start()
 
         # kill process if the computation time exceeds the maximum
@@ -152,7 +161,7 @@ if __name__ == "__main__":
             cnt = cnt + 1
 
     # save computation time in .csv file
-    np.savetxt('computation_time_' + PLANNER + '.csv', np.asarray(data), delimiter=",", fmt="%s")
+    np.savetxt(join(rootpath, 'results', 'computation_time_' + PLANNER + '.csv'), np.asarray(data), delimiter=",", fmt="%s")
 
     # display results
     print(' ')

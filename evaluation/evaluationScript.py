@@ -1,7 +1,7 @@
 import csv
 import os
 
-PLANNER = 'Optimization'   # planner ('HighLevel', 'Automaton', 'AutomatonStandalone' or 'Optimization')
+PLANNER = 'HighLevel'   # planner ('HighLevel', 'Automaton', 'AutomatonStandalone' or 'Optimization')
 
 def evaluation_matrics(data):
     """compute the performance metrics for the given data"""
@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
     # construct path to the file with the data
     dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    file_path = os.path.join(dir_path, 'computation_time_' + PLANNER + '.csv')
+    file_path = os.path.join(dir_path, 'results', 'computation_time_' + PLANNER + '.csv')
 
     # read data from .csv file
     data = []
