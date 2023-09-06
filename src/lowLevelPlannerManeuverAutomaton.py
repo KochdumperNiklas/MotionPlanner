@@ -13,12 +13,10 @@ import sys
 sys.path.append('./maneuverAutomaton/')
 from ManeuverAutomaton import ManeuverAutomaton
 from loadAROCcontroller import loadAROCcontroller
-
-# planning horizon for A*-search
-HORIZON = 2
+from maneuverAutomaton.Controller import FeedbackController
 
 
-def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, vel, space_all, ref_traj, MA):
+def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, space_all, ref_traj, MA, search_horizon=2):
     """plan a concrete trajectory for the given high-level plan using a maneuver automaton"""
 
     # check if the maneuver automaton contains occupancy sets for time intervals or time points
@@ -63,7 +61,7 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
         if collision_check(node, primitive, space_all, param, timepoint):
 
             # fix motion primitive if planning horizon is reached
-            if len(node.primitives) == cnt + HORIZON:
+            if len(node.primitives) == cnt + search_horizon:
                 for i in range(len(queue)):
                     if cnt < len(queue[i].primitives) and queue[i].primitives[cnt] != node.primitives[cnt]:
                         queue[i].cost = queue[i].cost + 1000
@@ -75,10 +73,13 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
             if res:
                 if timepoint:
                     u = extract_control_inputs(node, MA.primitives)
-                    return transform_trajectory(node.x[:, :ind+1], param), u[:, :ind]
+                    t = param['time_step'] * np.arange(0, x.shape[1] + 1)
+                    K = [np.zeros([u.shape[0], x.shape[0]]) for i in range(u.shape[1])]
+                    controller = FeedbackController(x, u, t, K)
+                    return transform_trajectory(node.x[:, :ind+1], param), u[:, :ind], controller
                 else:
-                    x, u = simulate_controller(MA, planning_problem, node, x, ind+1, param)
-                    return transform_trajectory(x, param), u
+                    x, u, controller = simulate_controller(MA, node, x, ind+1, param)
+                    return transform_trajectory(x, param), u, controller
 
             # precompute transformation matrix for speed-up
             phi = node.x[3, -1]
@@ -88,7 +89,7 @@ def lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, plan, ve
             for i in primitive.successors:
                 queue.append(expand_node(node, MA.primitives[i], i, ref_traj, fixed, T))
 
-    return None, None
+    return None, None, None
 
 
 def collision_check(node, primitive, space, param, timepoint):
@@ -140,7 +141,7 @@ def goal_check(node, primitive, param):
 
     return False, None
 
-def simulate_controller(MA, planning_problem, node, x0, ind, param):
+def simulate_controller(MA, node, x0, ind, param):
 
     # load controller object
     controller = loadAROCcontroller(MA, node.primitives, x0[:, 0])
@@ -162,7 +163,7 @@ def simulate_controller(MA, planning_problem, node, x0, ind, param):
         sol = solve_ivp(ode, [0, param['time_step']], x[:, i], args=(u[:, i], ), dense_output=True)
         x[:, i+1] = sol.sol(param['time_step'])
 
-    return x, u
+    return x, u, controller
 
 def extract_control_inputs(node, primitives):
     """construct the sequence of control inputs for the given node"""

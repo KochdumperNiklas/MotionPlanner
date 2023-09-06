@@ -10,7 +10,7 @@ import control as ct
 import pypoman
 from maneuverAutomaton.Controller import FeedbackController
 
-def lowLevelPlannerOptimization(scenario, planning_problem, param, plan, vel, space_all, ref_traj,
+def lowLevelPlannerOptimization(scenario, planning_problem, param, space_all, ref_traj,
                                 feedback_control=False, collision_avoidance=False, R=np.diag([0, 0]),
                                 R_diff=np.diag([0, 0]), R_feedback=np.diag([0.1, 0.1]),
                                 Q_feedback=np.diag([1, 1, 3, 10]), orientation_range_collision_avoidance=np.pi/40):

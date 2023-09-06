@@ -77,10 +77,13 @@ def maneuverAutomatonPlannerStandalone(scenario, planning_problem, param, MA):
             if res:
                 if param['timepoint']:
                     u = extract_control_inputs(node, MA.primitives)
-                    return transform_trajectory(node.x[:, :ind + 1], param), u[:, :ind]
+                    t = param['time_step'] * np.arange(0, x.shape[1] + 1)
+                    K = [np.zeros([u.shape[0], x.shape[0]]) for i in range(u.shape[1])]
+                    controller = FeedbackController(x, u, t, K)
+                    return transform_trajectory(node.x[:, :ind + 1], param), u[:, :ind], controller
                 else:
-                    x, u = simulate_controller(MA, planning_problem, node, x, ind + 1, param)
-                    return transform_trajectory(x, param), u
+                    x, u, controller = simulate_controller(MA, node, x, ind + 1, param)
+                    return transform_trajectory(x, param), u, controller
 
             # precompute transformation matrix for speed-up
             phi = node.x[3, -1]
@@ -90,7 +93,7 @@ def maneuverAutomatonPlannerStandalone(scenario, planning_problem, param, MA):
             for i in primitive.successors:
                 queue.append(expand_node(node, MA.primitives[i], i, T, goal_set))
 
-    return None, None
+    return None, None, None
 
 def get_goal_set(scenario, planning_problem):
     """extract a list of goal sets from the planning problem set"""
@@ -239,7 +242,7 @@ def goal_check(node, primitive, goal_set, param):
 
     return False, None
 
-def simulate_controller(MA, planning_problem, node, x0, ind, param):
+def simulate_controller(MA, node, x0, ind, param):
 
     # load controller object
     controller = loadAROCcontroller(MA, node.primitives, x0[:, 0])
@@ -261,7 +264,7 @@ def simulate_controller(MA, planning_problem, node, x0, ind, param):
         sol = solve_ivp(ode, [0, param['time_step']], x[:, i], args=(u[:, i], ), dense_output=True)
         x[:, i+1] = sol.sol(param['time_step'])
 
-    return x, u
+    return x, u, controller
 
 def extract_control_inputs(node, primitives):
     """construct the sequence of control inputs for the given node"""

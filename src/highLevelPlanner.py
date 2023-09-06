@@ -62,16 +62,13 @@ def highLevelPlanner(scenario, planning_problem, param, weight_lane_change=1000,
     # shrink space by intersecting with the forward reachable set
     space = reduce_space(space, plan, lanelets, offset, param)
 
-    # extract the safe velocity intervals at each time point
-    vel = [(s.bounds[1], s.bounds[3]) for s in space]
-
     # compute a desired reference trajectory
     ref_traj, plan = reference_trajectory(plan, free_space, space, vel_prof, time_lane, safe_dist, param, lanelets, partially_occupied)
 
     # resolve issue with spaces consisting of multiple distinct polygons
     space_glob = remove_multi_polyogns(space_glob, ref_traj)
 
-    return plan, vel, space_glob, ref_traj
+    return plan, space_glob, ref_traj
 
 
 def initialization(scenario, planning_problem, param):
