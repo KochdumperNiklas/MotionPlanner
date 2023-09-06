@@ -2,6 +2,9 @@ import xml.etree.ElementTree as ET
 import os
 import numpy as np
 from shapely.geometry import Polygon
+import shutil
+import time as timer
+import pickle
 import sys
 sys.path.append('./')
 
@@ -11,8 +14,33 @@ from maneuverAutomaton.ManeuverAutomaton import ManeuverAutomaton
 def loadAROCautomaton():
     """load a maneuver automaton create with the AROC toolbox"""
 
-    # load the XML file
+    # check if the maneuver automaton has been changed
     path = os.path.dirname(os.path.abspath(__file__))
+
+    create = False
+
+    if not os.path.isdir(os.path.join(path, 'AROC', 'automaton')):
+        create = True
+    else:
+        if not os.path.isfile(os.path.join(path, 'AROC', 'automaton', 'lastVersion.obj')):
+            create = True
+        else:
+            filehandler = open(os.path.join(path, 'AROC', 'automaton', 'lastVersion.obj'), 'rb')
+            data = pickle.load(filehandler)
+            time_modified = timer.ctime(os.path.getmtime(os.path.join(path, 'AROC', 'automaton.zip')))
+            if not time_modified == data['time']:
+                create = True
+
+    # extract the files if the automaton has been changed
+    if create == True:
+        if os.path.isdir(os.path.join(path, 'AROC', 'automaton')):
+            shutil.rmtree(os.path.join(path, 'AROC', 'automaton'))
+        shutil.unpack_archive(os.path.join(path, 'AROC', 'automaton.zip'), os.path.join(path, 'AROC', 'automaton'))
+        time_modified = timer.ctime(os.path.getmtime(os.path.join(path, 'AROC', 'automaton.zip')))
+        filehandler = open(os.path.join(path, 'AROC', 'automaton', 'lastVersion.obj'), 'wb')
+        pickle.dump({'time': time_modified}, filehandler)
+
+    # load the XML file
     tree = ET.parse(os.path.join(path, 'AROC', 'automaton', 'automaton.xml'))
 
     # get the root element of the XML tree
