@@ -103,6 +103,16 @@ def solve_scenario(file, return_dict, MA, path):
 if __name__ == "__main__":
     """main entry point"""
 
+    # parse input arguments to script
+    if len(sys.argv) > 1:
+        PLANNER = sys.argv[1]
+
+    if len(sys.argv) > 2:
+        VIDEO = bool(sys.argv[2])
+
+    if len(sys.argv) > 3:
+        TIMEOUT = float(sys.argv[3])
+
     # get path to root directory
     rootpath = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

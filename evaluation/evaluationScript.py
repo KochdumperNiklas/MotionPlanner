@@ -1,5 +1,6 @@
 import csv
 import os
+import sys
 
 PLANNER = 'HighLevel'   # planner ('HighLevel', 'Automaton', 'AutomatonStandalone' or 'Optimization')
 
@@ -29,6 +30,10 @@ def print_results(success, comp_time, collisions):
 
 if __name__ == "__main__":
     """main entry point"""
+
+    # parse input arguments to script
+    if len(sys.argv) > 1:
+        PLANNER = sys.argv[1]
 
     # construct path to the file with the data
     dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
