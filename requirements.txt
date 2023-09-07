@@ -1,6 +1,10 @@
-commonroad-io>=2022.3
+commonroad-io==2023.1
 matplotlib>=3.3.4
 casadi>=3.5.5
 opencv-python>=4.7.0.72
 numpy>=1.22.4
 shapely>=2.0.1
+control>=0.9.4
+mat4py>=0.5.0
+pypoman>=1.0.0
+commonroad-route-planner>=2022.3
