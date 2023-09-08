@@ -48,6 +48,9 @@ if __name__ == "__main__":
         MA = loadAROCautomaton()
         x, u, controller = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, space, ref_traj, MA)
 
+    if x is None:
+        raise Exception('Low-level trajectory planner failed!')
+
     # visualization
     plt.figure(figsize=(25, 10))
 
