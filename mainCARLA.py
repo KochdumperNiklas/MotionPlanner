@@ -1,11 +1,5 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2019 Computer Vision Center (CVC) at the Universitat Autonoma de
-# Barcelona (UAB).
-#
-# This work is licensed under the terms of the MIT license.
-# For a copy, see <https://opensource.org/licenses/MIT>.
-
 import glob
 import os
 import sys
@@ -62,7 +56,7 @@ MAP = 'Town01'                      # CARLA map
 PLANNER = 'Optimization'            # motion planner ('Automaton' or 'Optimization')
 HORIZON = 3                         # planning horizon (in seconds)
 REPLAN = 0.3                        # time after which the trajectory is re-planned (in seconds)
-FREQUENCY = 25                     # control frequency (in Hertz)
+FREQUENCY = 25                      # control frequency (in Hertz)
 SENSORRANGE = 100                   # sensor range of the car (in meters)
 CARS = 100                          # number of cars in the map
 REAL_DYNAMICS = True                # use real car dynamics from the CARLA vehicle model
@@ -200,7 +194,7 @@ def main():
 
     if VIDEO:
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-        video = cv2.VideoWriter(os.path.join('data', 'videoCARLA.mp4'), fourcc, FREQUENCY, (800+600, 600))
+        video = cv2.VideoWriter(os.path.join('results', 'CARLA', 'videoCARLA.mp4'), fourcc, FREQUENCY, (800+600, 600))
 
     # set weather
     w = [carla.WeatherParameters.ClearNoon, carla.WeatherParameters.CloudyNoon, carla.WeatherParameters.WetNoon,
@@ -266,6 +260,9 @@ def main():
 
                     # check if goal has been reached
                     if (goal.location.x - x0[0])**2 + (goal.location.y + x0[1])**2 < 10**2:
+                        print('####################################################')
+                        print('                 GOAL REACHED')
+                        print('####################################################')
                         return
 
                     # predict the future positions of the other vehicles
@@ -279,6 +276,7 @@ def main():
                             orientation = np.deg2rad(transform.rotation.yaw)
                             vel = v.get_velocity()
                             velocity = np.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)
+                            velocity = max(0, velocity - 1)
                             acc = v.get_acceleration()
                             acceleration = np.sqrt(acc.x ** 2 + acc.y ** 2 + acc.z ** 2) * np.sign(acc.x*vel.x + acc.y*vel.y)
                             length = 2*v.bounding_box.extent.x
@@ -289,7 +287,7 @@ def main():
                                 width = 1
 
                             state = CustomState(position=np.array([transform.location.x, -transform.location.y]),
-                                                velocity=velocity, orientation=-orientation, time_step=0, acceleration=acceleration)
+                                                velocity=velocity, orientation=-orientation, time_step=0)
                             shape = Rectangle(width=width, length=length)
                             dynamic_obstacle = DynamicObstacle(scenario.generate_object_id(), ObstacleType.CAR, shape,
                                                                state)
@@ -378,14 +376,20 @@ def main():
 
                     # store planning problem
                     data = {'scenario': scenario_, 'problem': planning_problem}
-                    filehandler = open(os.path.join('auxiliary', 'CARLAdata.obj'), 'wb')
+                    filehandler = open(os.path.join('results', 'CARLA', 'CARLAdata.obj'), 'wb')
                     pickle.dump(data, filehandler)
 
                     # solve motion planning problem
                     start_time = time.time()
                     try:
-                        plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param, compute_free_space=False, 
-                                                                      minimum_safe_distance=0.5, improve_velocity_profile=True)
+                        if PLANNER == 'Automaton':
+                            plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param, compute_free_space=True,
+                                                                            minimum_safe_distance=0.5, improve_velocity_profile=True)
+                        else:
+                            plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param,
+                                                                          compute_free_space=False,
+                                                                          minimum_safe_distance=0.5,
+                                                                          improve_velocity_profile=True)
                     except Exception as e:
                         print(e)
                         return
@@ -436,7 +440,7 @@ def main():
                     traj['t'].append(traj['t'][-1] + 1 / FREQUENCY)
 
                 else:
-                    x0 = x[:, np.floor(t/param['time_step'])]
+                    x0 = x[:, int(np.floor(t/param['time_step']))]
                     pose = Transform(Location(x=x0[0], y=-x0[1], z=0.3),
                                      Rotation(pitch=0.0, yaw=-np.rad2deg(x0[3]), roll=0.0))
                     vehicle.set_transform(pose)
@@ -556,11 +560,11 @@ def main():
             video.release()
 
         # write computation times to file
-        filehandler = open(os.path.join('data', 'computationTime.obj'), 'wb')
+        filehandler = open(os.path.join('results', 'CARLA', 'computationTime.obj'), 'wb')
         pickle.dump(comp_time, filehandler)
 
         # write trajectory to file
-        filehandler = open(os.path.join('data', 'trajectory.obj'), 'wb')
+        filehandler = open(os.path.join('results', 'CARLA', 'trajectory.obj'), 'wb')
         pickle.dump(traj, filehandler)
 
         print('destroying actors.')
