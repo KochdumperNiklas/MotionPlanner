@@ -192,6 +192,12 @@ def main():
     plt.figure(figsize=(7, 7))
     horizon = int(np.round(HORIZON/scenario.dt))
 
+    if not os.path.isdir('results'):
+        os.mkdir('results')
+
+    if not os.path.isdir(os.path.join('results', 'CARLA')):
+        os.mkdir(os.path.join('results', 'CARLA'))
+
     if VIDEO:
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
         video = cv2.VideoWriter(os.path.join('results', 'CARLA', 'videoCARLA.mp4'), fourcc, FREQUENCY, (800+600, 600))
@@ -383,23 +389,24 @@ def main():
                     start_time = time.time()
                     try:
                         if PLANNER == 'Automaton':
-                            plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param, compute_free_space=True,
-                                                                            minimum_safe_distance=0.5, improve_velocity_profile=True)
+                            plan, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param,
+                                                                     compute_free_space=True, minimum_safe_distance=0.5,
+                                                                     improve_velocity_profile=True)
                         else:
-                            plan, vel, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param,
-                                                                          compute_free_space=False,
-                                                                          minimum_safe_distance=0.5,
-                                                                          improve_velocity_profile=True)
+                            plan, space, ref_traj = highLevelPlanner(scenario_, planning_problem, param,
+                                                                     compute_free_space=False,
+                                                                     minimum_safe_distance=0.5,
+                                                                     improve_velocity_profile=True)
                     except Exception as e:
                         print(e)
                         return
                     comp_time['high'].append(time.time() - start_time)
 
                     if PLANNER == 'Automaton':
-                        x, u = lowLevelPlannerManeuverAutomaton(scenario_, planning_problem, param, plan, vel, space,
-                                                                ref_traj, MA)
+                        x, u, controller = lowLevelPlannerManeuverAutomaton(scenario_, planning_problem, param, space,
+                                                                            ref_traj, MA)
                     elif PLANNER == 'Optimization':
-                        x, u, controller = lowLevelPlannerOptimization(scenario_, planning_problem, param, plan, vel,
+                        x, u, controller = lowLevelPlannerOptimization(scenario_, planning_problem, param,
                                                                        space, ref_traj, feedback_control=True,
                                                                        R_diff=np.diag([0, 0.1]))
                     else:
