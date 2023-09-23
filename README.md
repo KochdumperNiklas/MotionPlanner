@@ -1,6 +1,6 @@
 # Description
 
-This repository contains the Python implementation of the reachability-based decision module for autonomous road vehicles presented in the paper **Efficient Reachability-Based Decision Making for Autonomous Driving**.
+This repository contains the Python implementation of the reachability-based decision module for autonomous road vehicles presented in the paper [Real-Time Capable Decision Making for Autonomous Driving Using Reachable Sets](https://arxiv.org/pdf/2309.12289.pdf).
 
 # Installation
 We recommend to create a Anaconda environment for running the code:
@@ -21,7 +21,7 @@ where the input arguments are the name of the CommonRoad scenario that should be
 
 # Interface to CommonRoad
 
-Our motion planners require the traffic scenarios that should be solved to be represented in the [CommonRoad format](https://mediatum.ub.tum.de/doc/1379638/1379638.pdf). Please note that many other common data formats used for autonomous driving such as OpenStreetMap, OpenDRIVE, and SUMO can be automatically converted to CommonRoad format using the [CommonRoad Scenario Designer](https://mediatum.ub.tum.de/doc/1624607/document.pdf). In this repository we provide 100 exemplary CommonRoad traffic scenarios in the directory */scenarios*. Many additional scenarios are available on the [CommonRoad website](https://commonroad.in.tum.de/). Please note that our implementation currently does not support interactive scenarios. The 2000 scenarios we used for the numerical evaluation in our paper are provided in our [CodeOcean repeatability package](https://codeocean.com/capsule/1869710/tree) under */data/CommonRoadScenarios.zip*.  
+Our motion planners require the traffic scenarios that should be solved to be represented in the [CommonRoad format](https://mediatum.ub.tum.de/doc/1379638/1379638.pdf). Please note that many other common data formats used for autonomous driving such as OpenStreetMap, OpenDRIVE, and SUMO can be automatically converted to CommonRoad format using the [CommonRoad Scenario Designer](https://mediatum.ub.tum.de/doc/1624607/document.pdf). In this repository we provide 100 exemplary CommonRoad traffic scenarios in the directory */scenarios*. Many additional scenarios are available on the [CommonRoad website](https://commonroad.in.tum.de/). Please note that our implementation currently does not support interactive scenarios. The 2000 scenarios we used for the numerical evaluation in our paper are provided in our [CodeOcean repeatability package](https://codeocean.com/capsule/8454823/tree/v1) under */data/scenarios.zip*.  
 
 # Interface to CARLA
 
