@@ -10,6 +10,7 @@ from shapely.geometry import Point
 from shapely.affinity import translate
 import control as ct
 import pypoman
+from commonroad.geometry.shape import Rectangle
 from maneuverAutomaton.Controller import FeedbackController
 
 def lowLevelPlannerLinearization(scenario, planning_problem, param, space_all, ref_traj,
@@ -22,10 +23,18 @@ def lowLevelPlannerLinearization(scenario, planning_problem, param, space_all, r
     x, u = initial_guess(ref_traj, param)
 
     # plan the trajectory via quadratic programming
-    x_, u_ = optimal_control_problem(x, u, param)
+    x_, u_ = optimal_control_problem(x, u, x, param)
 
     # simulate the planned trajectory to increase accuracy
-    x2, u2 = simulate_trajectory(x_, u_, param)
+    x2, u2, x_rear = simulate_trajectory(x_, u_, param)
+
+    # refine trajectory
+    cnt = 1
+
+    while collision_check(x2, space_all, param) and cnt < 5:
+        x_, u_ = optimal_control_problem(x, u2, x + 0.5*(x_ - x_rear), param)
+        x2, u2, x_rear = simulate_trajectory(x_, u_, param)
+        cnt += 1
 
     # construct feedback controller object that tracks the computed reference trajectory
     controller = construct_feedback_controller(x2, u2, Q_feedback, R_feedback, feedback_control, param)
@@ -58,7 +67,7 @@ def initial_guess(ref_traj, param):
 
     return x, u 
 
-def optimal_control_problem(x, u, param):
+def optimal_control_problem(x, u, x_ref, param):
     """plan a trajectory via quadratic programming"""
 
     n = x.shape[0]
@@ -107,7 +116,7 @@ def optimal_control_problem(x, u, param):
 
     for i in range(u.shape[1]):
         P = P + np.transpose(Atot[i+1][0:2,:]) @ Atot[i+1][0:2,:]
-        q = q + np.transpose(ctot[i+1][0:2] - x[0:2, [i+1]]) @ Atot[i+1][0:2,:]
+        q = q + np.transpose(ctot[i+1][0:2] - x_ref[0:2, [i+1]]) @ Atot[i+1][0:2,:]
 
     ub = np.matlib.repmat(np.array([[param['a_max']], [param['s_max']]]), N, 1)
     lb = -ub
@@ -129,6 +138,7 @@ def simulate_trajectory(x, u, param):
     """simulate the planned trajectory to increase the accuracy"""
 
     x_ = deepcopy(x)
+    x_rear = deepcopy(x)
     u_ = deepcopy(u)
 
     # system dynamics
@@ -139,15 +149,15 @@ def simulate_trajectory(x, u, param):
 
     # loop over all time steps
     for i in range(x.shape[1]-1):
-        sol = solve_ivp(ode, [0, param['time_step']], x_[:, i], args=(u_[:, i], ), dense_output=True)
-        x_[:, i+1] = sol.sol(param['time_step'])
+        sol = solve_ivp(ode, [0, param['time_step']], x_rear[:, i], args=(u_[:, i], ), dense_output=True)
+        x_rear[:, i+1] = sol.sol(param['time_step'])
 
     # transform trajectory back to vehicle center
     for i in range(x.shape[1]):
-        x_[0, i] = x_[0, i] + np.cos(x_[3, i]) * param['b']
-        x_[1, i] = x_[1, i] + np.sin(x_[3, i]) * param['b']
+        x_[0, i] = x_rear[0, i] + np.cos(x_rear[3, i]) * param['b']
+        x_[1, i] = x_rear[1, i] + np.sin(x_rear[3, i]) * param['b']
 
-    return x_, u_
+    return x_, u_, x_rear
 
 def construct_feedback_controller(x, u, Q, R, feedback_control, param):
     """construct feedback controller object that tracks the computed reference trajectory"""
@@ -183,3 +193,18 @@ def construct_feedback_controller(x, u, Q, R, feedback_control, param):
     controller = FeedbackController(x, u, t, K)
 
     return controller
+
+def collision_check(x, space, param):
+    """check if there is a collision for the given trajectory"""
+
+    # loop over all time steps
+    for i in range(1, len(space)):
+
+        car = Rectangle(length=param['length'], width=param['width'], 
+                        center=np.array([x[0, i], x[1, i]]),
+                        orientation=np.mod(x[3, i], 2*np.pi))
+    
+    if ~space[i].contains(car.shapely_object):
+        return True
+
+    return False
