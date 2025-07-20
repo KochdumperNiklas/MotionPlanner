@@ -64,7 +64,6 @@ def optimal_control_problem(x, u, param):
     n = x.shape[0]
     m = u.shape[0]
     N = u.shape[1]
-    M = 4
 
     Atot = []
     Atot.append(np.zeros((n, n)))
@@ -73,52 +72,42 @@ def optimal_control_problem(x, u, param):
 
     for i in range(u.shape[1]):
 
-        for j in range(M):
+        # linearize system dynamics
+        x_lin = 0.5 * (x[:, i] + x[:, i + 1])
+        u_lin = u[:, i]
 
-            # linearize system dynamics
-            x_lin = x[:, i] + (0.5/M + j/M) * (x[:, i+1] - x[:, i])
-            u_lin = u[:, i]
-
-            A = np.array([[0, 0, np.cos(x_lin[3]), -x_lin[2]*np.sin(x_lin[3])],
-                        [0, 0, np.sin(x_lin[3]), x_lin[2]*np.cos(x_lin[3])],
-                        [0, 0, 0, 0],
-                        [0, 0, np.tan(u_lin[1])/param['wheelbase'], 0]])
-            B = np.array([[0, 0],
-                        [0, 0],
-                        [1, 0],
-                        [0, (x_lin[2]*(np.tan(u_lin[1])**2 + 1))/param['wheelbase']]])
-            c = np.array([[x_lin[2] * np.cos(x_lin[3])],
-                        [x_lin[2] * np.sin(x_lin[3])],
-                        [u_lin[0]],
-                        [x_lin[2] * np.tan(u_lin[1])/param['wheelbase']]])
-            
-            A = A * param['time_step']/M
-            B = B * param['time_step']/M
-            c = c * param['time_step']/M
+        A = np.array([[0, 0, np.cos(x_lin[3]), -x_lin[2]*np.sin(x_lin[3])],
+                      [0, 0, np.sin(x_lin[3]), x_lin[2]*np.cos(x_lin[3])],
+                      [0, 0, 0, 0],
+                      [0, 0, np.tan(u_lin[1])/param['wheelbase'], 0]])
+        B = np.array([[0, 0],
+                      [0, 0],
+                      [1, 0],
+                      [0, (x_lin[2]*(np.tan(u_lin[1])**2 + 1))/param['wheelbase']]])
+        c = np.array([[x_lin[2] * np.cos(x_lin[3])],
+                      [x_lin[2] * np.sin(x_lin[3])],
+                      [u_lin[0]],
+                      [x_lin[2] * np.tan(u_lin[1])/param['wheelbase']]])
         
-            # propagate system matrices  
-            if j == 0:
-                c_ = ctot[i]
-                if i == 0:
-                    A_ = B
-                else:
-                    A_ = np.concatenate(((A + np.eye(n)) @ A_, B), axis = 1)
-            else:
-                A_ = (A + np.eye(n)) @ A_
-                A_[:, -B.shape[1]:] = A_[:, -B.shape[1]:] + B
-
-            c_ = (A + np.eye(n)) @ c_ + c - A @ np.expand_dims(x_lin, axis=1) - B @ np.expand_dims(u_lin, axis=1)
-
+        A = A * param['time_step']
+        B = B * param['time_step']
+        c = c * param['time_step']
+        
+        # propagate system matrices  
+        if i == 0:
+            A_ = B
+        else:
+            A_ = np.concatenate(((A + np.eye(n)) @ A_, B), axis = 1)
         Atot.append(np.concatenate((A_, np.zeros((n, m*(N-i-1)))), axis=1))
-        ctot.append(c_)
+        ctot.append((A + np.eye(n)) @ ctot[i] + c - A @ np.expand_dims(x_lin, axis=1) - B @ np.expand_dims(u_lin, axis=1))
 
     # bring optimization problem to quadratic program formulation
     P = 0
     q = 0
 
     for i in range(u.shape[1]):
-        P = P + np.transpose(Atot[i+1][0:2, :]) @ Atot[i+1][0:2, :]
-        q = q + np.transpose(ctot[i+1][0:2] - x[0:2, [i+1]]) @ Atot[i+1][0:2,:]
+        P = P + np.transpose(Atot[i+1]) @ Atot[i+1]
+        q = q + np.transpose(ctot[i+1] - x[:, [i+1]]) @ Atot[i+1]
 
     ub = np.matlib.repmat(np.array([[param['a_max']], [param['s_max']]]), N, 1)
     lb = -ub
