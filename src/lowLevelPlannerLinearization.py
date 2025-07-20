@@ -106,8 +106,8 @@ def optimal_control_problem(x, u, param):
     q = 0
 
     for i in range(u.shape[1]):
-        P = P + np.transpose(Atot[i+1]) @ Atot[i+1]
-        q = q + np.transpose(ctot[i+1] - x[:, [i+1]]) @ Atot[i+1]
+        P = P + np.transpose(Atot[i+1][0:2,:]) @ Atot[i+1][0:2,:]
+        q = q + np.transpose(ctot[i+1][0:2] - x[0:2, [i+1]]) @ Atot[i+1][0:2,:]
 
     ub = np.matlib.repmat(np.array([[param['a_max']], [param['s_max']]]), N, 1)
     lb = -ub
