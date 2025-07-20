@@ -16,10 +16,11 @@ from maneuverAutomaton.loadAROCautomaton import loadAROCautomaton
 from src.highLevelPlanner import highLevelPlanner
 from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
 from src.lowLevelPlannerOptimization import lowLevelPlannerOptimization
+from src.lowLevelPlannerLinearization import lowLevelPlannerLinearization
 
 
 SCENARIO = "ZAM_Zip-1_19_T-1.xml"       # CommonRoad scenario that should be solved
-PLANNER = 'Optimization'                # motion planner ('Automaton' or 'Optimization')
+PLANNER = 'Linearization'               # motion planner ('Automaton', 'Optimization' or 'Linearization')
 
 
 if __name__ == "__main__":
@@ -44,6 +45,8 @@ if __name__ == "__main__":
     # run the low-level trajectory planner
     if PLANNER == "Optimization":
         x, u, controller = lowLevelPlannerOptimization(scenario, planning_problem, param, space, ref_traj)
+    elif PLANNER == "Linearization":
+        x, u, controller = lowLevelPlannerLinearization(scenario, planning_problem, param, space, ref_traj)
     else:
         MA = loadAROCautomaton()
         x, u, controller = lowLevelPlannerManeuverAutomaton(scenario, planning_problem, param, space, ref_traj, MA)
