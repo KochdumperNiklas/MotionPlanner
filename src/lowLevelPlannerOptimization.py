@@ -49,8 +49,8 @@ def initial_guess(ref_traj, param):
     steering_angle = []
 
     for i in range(0, ref_traj.shape[1]-1):
-        steering_angle.append(param['wheelbase'] * ((ref_traj[3, i+1] - ref_traj[3, i]) * param['time_step']) /
-                              np.maximum(0.5 * (ref_traj[2, i+1] + ref_traj[2, i]), 0.1))
+        steering_angle.append(np.arctan(param['wheelbase'] * ((ref_traj[3, i+1] - ref_traj[3, i]) / param['time_step']) /
+                              np.maximum(0.5 * (ref_traj[2, i+1] + ref_traj[2, i]), 0.1)))
 
     # construct initial guesses for states and inputs
     steering_angle = np.maximum(-param['s_max'], np.minimum(param['s_max'], np.expand_dims(np.asarray(steering_angle), axis=0)))
