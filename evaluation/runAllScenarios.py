@@ -24,12 +24,13 @@ from auxiliary.collisionChecker import collisionChecker
 from src.highLevelPlanner import highLevelPlanner
 from src.lowLevelPlannerManeuverAutomaton import lowLevelPlannerManeuverAutomaton
 from src.lowLevelPlannerOptimization import lowLevelPlannerOptimization
+from src.lowLevelPlannerLinearization import lowLevelPlannerLinearization
 from src.maneuverAutomatonPlannerStandalone import maneuverAutomatonPlannerStandalone
 
 import warnings
 warnings.filterwarnings("ignore")
 
-PLANNER = 'HighLevel'   # planner ('HighLevel', 'Automaton', 'AutomatonStandalone' or 'Optimization')
+PLANNER = 'Linearization'   # planner ('HighLevel', 'Automaton', 'AutomatonStandalone' or 'Optimization')
 VIDEO = False           # create videos for all scenarios that can be solved
 TIMEOUT = 100           # maximum computation time
 
@@ -70,6 +71,12 @@ def solve_scenario(file, return_dict, MA, path):
                                                           desired_velocity='init')
             x, u, _ = lowLevelPlannerOptimization(scenario, planning_problem, param, space, ref_traj)
             comp_time = time.time() - start_time
+        elif PLANNER == 'Linearization':
+            start_time = time.time()
+            plan, space, ref_traj = highLevelPlanner(scenario, planning_problem, param, compute_free_space=False,
+                                                          desired_velocity='init')
+            x, u, _ = lowLevelPlannerLinearization(scenario, planning_problem, param, space, ref_traj)
+            comp_time = time.time() - start_time
         elif PLANNER == 'HighLevel':
             start_time = time.time()
             plan, space, ref_traj = highLevelPlanner(scenario, planning_problem, param, compute_free_space=False,
@@ -83,19 +90,19 @@ def solve_scenario(file, return_dict, MA, path):
             comp_time = time.time() - start_time
 
         if x is None:
-            print(f + ': failed')
+            print(file + ': failed')
             comp_time = 'failed'
         else:
             comp_time = comp_time / return_dict['final_time']
             savemat(join(path, 'results', 'solutions', PLANNER, file[:-4]) + '.mat', {'x': x, 'u': u})
-            print(f + ': ' + str(comp_time))
+            print(file + ': ' + str(comp_time))
             if not collisionChecker(scenario, x, param):
                 collision = 'collision'
             elif VIDEO:
-                createVideo(f, scenario, planning_problem, param, x)
+                createVideo(file, scenario, planning_problem, param, x)
     except Exception as e:
         comp_time = str(e).replace("\n", "").replace(",", "")
-        print(f + ': ' + str(e))
+        print(file + ': ' + str(e))
 
     return_dict['comp_time'] = comp_time
     return_dict['collision'] = collision
